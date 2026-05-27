@@ -1,0 +1,21 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="pytz" />
+          <option value="fake-factory" />
+          <option value="django" />
+          <option value="numpy" />
+          <option value="pytest" />
+          <option value="django-tailwind" />
+          <option value="django-compressor" />
+          <option value="django-crispy-forms" />
+          <option value="mypy" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
