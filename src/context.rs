@@ -4,54 +4,54 @@ use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct Context {
-    pub buffer: Rc<Vec<char>>,
+pub struct Context<'src> {
+    pub buffer: &'src Vec<char>,
     pub position: usize,
 }
 
-impl Context {
+impl <'src> Context<'src> {
     pub fn success<T>(&self, result: T, position: usize) -> ParseResult<T> {
-        Success::new(self.buffer.clone(), result, position)
+        Success::new(self.buffer, result, position)
     }
 
-    pub fn failure<T>(&self, message: ImString, position: usize) -> ParseResult<T> {
-        Failure::new(self.buffer.clone(), position, message)
+    pub fn failure<T>(&self, message: &'src str, position: usize) -> ParseResult<T> {
+        Failure::new(self.buffer, position, message)
     }
 
     pub fn to_position_string(&self) -> String {
-        position_string(&*self.buffer, self.position)
+        position_string(self.buffer, self.position)
     }
 }
 
-impl<'a> Display for Context {
+impl<'src> Display for Context<'src> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Context[{}]", self.to_position_string())
     }
 }
 
 #[derive(Debug)]
-pub enum ParseResult<T> {
-    Failure(Failure),
-    Success(Success<T>),
+pub enum ParseResult<'src, T> {
+    Failure(Failure<'src>),
+    Success(Success<'src, T>),
 }
 
 #[derive(Debug)]
-pub struct Failure {
-    pub context: Rc<Context>,
-    pub message: ImString,
+pub struct Failure<'src> {
+    pub context: Box<Context<'src>>,
+    pub message: &'src str,
 }
 
-impl Failure {
-    pub fn new<T>(buffer: Rc<Vec<char>>, position: usize, message: ImString) -> ParseResult<T> {
+impl <'src> Failure<'src> {
+    pub fn new<T>(buffer: &'src Vec<char>, position: usize, message: &'src str) -> ParseResult<'src, T> {
         let result = ParseResult::Failure(Failure {
-            context: Rc::new(Context { buffer, position }),
+            context: Box::new(Context { buffer, position }),
             message,
         });
         result
     }
 }
 
-impl Display for Failure {
+impl <'src> Display for Failure<'src> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -63,22 +63,22 @@ impl Display for Failure {
 }
 
 #[derive(Debug)]
-pub struct Success<T> {
-    pub context: Rc<Context>,
-    pub value: Rc<T>,
+pub struct Success<'src, T> {
+    pub context: Box<Context<'src>>,
+    pub value: T,
 }
 
-impl<T> Success<T> {
-    pub(crate) fn new(buffer: Rc<Vec<char>>, result: T, position: usize) -> ParseResult<T> {
+impl<'src, T> Success<'src, T> {
+    pub(crate) fn new(buffer: &'src Vec<char>, result: T, position: usize) -> ParseResult<'src, T> {
         let pr = ParseResult::Success(Success {
-            context: Rc::new(Context { buffer, position }),
-            value: Rc::new(result),
+            context: Box::new(Context { buffer, position }),
+            value: result,
         });
         pr
     }
 }
 
-impl<T> ParseResult<T> {
+impl<'src, T> ParseResult<'src, T> {
     fn is_success(&self) -> bool {
         match self {
             ParseResult::Success { .. } => true,
@@ -94,10 +94,13 @@ impl<T> ParseResult<T> {
         match self {
             ParseResult::Failure(failure) => failure
                 .context
-                .failure(failure.message.clone(), failure.context.position),
-            ParseResult::Success(success) => success
-                .context
-                .success(callback(&*success.value), success.context.position),
+                .failure(failure.message, failure.context.position),
+            ParseResult::Success(success) => {
+                let mapped = callback(&success.value);
+                success
+                    .context
+                    .success(mapped, success.context.position)
+            },
         }
     }
 }

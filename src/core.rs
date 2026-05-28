@@ -1,7 +1,8 @@
 use std::any::Any;
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
+use std::fmt::{write, Debug, Display};
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::Arc;
 use imstr::ImString;
 use unicode_categories::UnicodeCategories;
 use crate::context::{Context, ParseResult, Success, Failure};
@@ -58,33 +59,88 @@ pub fn position_string(buffer: &Vec<char>, position: usize) -> String {
     format!("{}:{}", line, column)
 }
 
-enum Parser {
-    Char(CharParser)
+impl <'src> PartialEq for CharTest<'src> {
+    fn eq(&self, other: &CharTest<'src>) -> bool {
+        self.description == other.description && Rc::as_ptr(&self.test) == Rc::as_ptr(&other.test)
+    }
+}
+
+impl <'src> Eq for CharTest<'src> {}
+
+impl <'src> Debug for CharTest<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CharTest {{ description: {:?}, test: @{:?}", self.description, Rc::as_ptr(&self.test))
+    }
+}
+
+impl <'src> Hash for CharTest<'src> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.description.hash(state);
+        Rc::as_ptr(&self.test).hash(state);
+    }
+}
+
+enum Parser<'src> {
+    Char(CharParser<'src>)
 }
 
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
-enum CharParser {
+enum CharParser<'src> {
     Any,
-    Char(char),
+    Exact(char),
     Letter,
     Digit(Option<u32>),
-    AnyOf(Vec<char>),
+    OneOf(Vec<char>),
     Lowercase,
+    Uppercase,
     NoneOf(Vec<char>),
-    Predicate(CharTest),
+    Predicate(CharTest<'src>),
     Whitespace,
     Word,
 }
 
-#[derive(Clone, PartialEq, Debug, Eq, Hash)]
-struct CharTest {
-    description: Option<ImString>,
-    test: Rc<dyn FnOnce(char) -> bool>
+static ANY: Arc<fn(char) -> bool> = Arc::new(|_: char| true);
+fn exact(exp: char, c: char) -> bool { c == exp }
+fn letter(c: char) -> bool { c.is_ascii_alphabetic() }
+fn digit(c: char) -> bool { c.is_ascii_digit() }
+fn one_of(chars: &Vec<char>, c: char) -> bool { chars.contains(&c) }
+fn lowercase(c: char) -> bool { c.is_ascii_lowercase() }
+fn uppercase(c: char) -> bool { c.is_ascii_uppercase() }
+fn none_of(chars: &Vec<char>, c: char) -> bool { !chars.contains(&c) }
+fn predicate(pred: fn(char) -> bool, c: char) -> bool { pred(c) }
+fn whitespace(c: char) -> bool { c.is_whitespace() }
+fn word(c: char) -> bool { c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_' }
+
+impl <'src> CharParser<'src> {
+    fn test(&self) -> CharTest<'src> {
+        match self {
+            CharParser::Any => CharTest {
+                description: Some("ANY character"),
+                test: Rc::new(ANY),
+            },
+            CharParser::Exact(_) => {}
+            CharParser::Letter => {}
+            CharParser::Digit(_) => {}
+            CharParser::OneOf(_) => {}
+            CharParser::Lowercase => {}
+            CharParser::NoneOf(_) => {}
+            CharParser::Predicate(_) => {}
+            CharParser::Whitespace => {}
+            CharParser::Word => {}
+        }
+    }
 }
 
-pub trait Parse<T>: Any + PartialEq + Debug + Clone + Eq + Hash {
+#[derive(Clone)]
+struct CharTest<'src> {
+    description: Option<&'src str>,
+    test: Rc<dyn FnOnce(char) -> bool>,
+}
+
+
+pub trait Parse<'src, T>: Any + PartialEq + Debug + Clone + Eq + Hash {
     fn parse_on(&self, context: &Context) -> ParseResult<T>;
-    fn fast_parse_on(&self, buffer: Rc<Vec<char>>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, buffer: &'src Vec<char>, position: usize) -> Option<usize> {
         let result: ParseResult<T> = self.parse_on(&Context { buffer, position });
         match result {
             ParseResult::Failure(_) => None,
@@ -92,17 +148,17 @@ pub trait Parse<T>: Any + PartialEq + Debug + Clone + Eq + Hash {
         }
     }
     fn parse(&self, input: &str, position: usize) -> ParseResult<T> {
-        self.parse_on(&Context { buffer: Rc::new(input.chars().collect()), position })
+        self.parse_on(&Context { buffer: &input.chars().collect(), position })
     }
 }
 
-impl Parse<char> for CharParser {
+impl <'src> Parse<'src, char> for CharParser<'src> {
     fn parse_on(&self, context: &Context) -> ParseResult<char> {
-        let buffer = context.buffer.clone();
+        let buffer = context.buffer;
         let position = context.position;
         match self {
-            CharParser::Any => Success::new(buffer.clone(), buffer[position], position + 1),
-            CharParser::Char(c) =>
+            CharParser::Any => Success::new(buffer, buffer[position], position + 1),
+            CharParser::Exact(c) =>
                 check_next_char(
                     context,
                     Box::new(|bp: char| bp == *c),
@@ -120,11 +176,11 @@ impl Parse<char> for CharParser {
                     Box::new(|bp: char| bp.is_digit(radix.unwrap_or(10))),
                     format!("expected digit for base {}, but found '{}'", radix.unwrap_or(10), buffer[position])
                 ),
-            CharParser::AnyOf(chars) =>
+            CharParser::OneOf(chars) =>
                 check_next_char(
                     context,
                     Box::new(|bp: char| chars.contains(&bp)),
-                    format!("expected any of {:?}, but found '{}'", chars, buffer[position])
+                    format!("expected ANY of {:?}, but found '{}'", chars, buffer[position])
                 ),
             CharParser::Lowercase =>
                 check_next_char(
@@ -141,7 +197,7 @@ impl Parse<char> for CharParser {
             CharParser::Predicate(test) =>
                 check_next_char(
                     context,
-                    Box::new(|bp: char| test(bp)),
+                    Box::new(test.test),
                     format!("expected predicate, but found '{}'", buffer[position])
                 ),
             CharParser::Whitespace =>
@@ -154,13 +210,13 @@ impl Parse<char> for CharParser {
                 check_next_char(
                     context,
                     Box::new(|bp: char| bp.is_ascii_alphabetic() || bp.is_ascii_digit() || bp == '_'),
-                    format!("expected word character , but found '{}'", buffer[position])
+                    format!("expected word character (alpha, digit or _), but found '{}'", buffer[position])
                 )
         }
     }
 }
 
-fn check_next_char(context: &Context, test: Box<dyn FnOnce(char) -> bool>, failure_message: String) -> ParseResult<char> {
+fn check_next_char(context: &Context, test: Box<CharTest>, failure_message: String) -> ParseResult<char> {
     let buffer = context.buffer.clone();
     let position = context.position;
     if test(buffer[position]) {
