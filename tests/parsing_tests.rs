@@ -1,7 +1,8 @@
 use googletest::prelude::*;
 use rust_petitparser::character::char;
-use rust_petitparser::combinator::{seq2, seq4};
+use rust_petitparser::combinator::{choice2, choice2_with_joiner, seq2, seq4};
 use rust_petitparser::core::Parser;
+use rust_petitparser::failure_joiner::SELECT_FARTHEST_JOINED;
 
 #[gtest]
 fn character_test() {
@@ -53,5 +54,40 @@ fn seq4_test() {
     assert_that!(success.value.1, eq('b'));
     assert_that!(success.value.2, eq('c'));
     assert_that!(success.value.3, eq('d'));
+}
 
+#[gtest]
+fn choice2_test() {
+    let p = choice2(char('a', None), char('b', None));
+    let success = p.parse("ac").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('a'));
+    let success = p.parse("bc").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('b'));
+    let failure = p.parse("cc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("expected 'b', but found 'c'"));
+}
+
+#[gtest]
+fn choice2_with_joiner_test() {
+    let p = choice2_with_joiner(char('a', None), char('b', None), SELECT_FARTHEST_JOINED);
+    let success = p.parse("ac").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('a'));
+    let success = p.parse("bc").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('b'));
+    let failure = p.parse("cc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("expected 'a', but found 'c' OR expected 'b', but found 'c'"));
+}
+
+#[gtest]
+fn choice2_failure_test() {
+    let p = choice2(seq2(char('a', None), char('b', None)), seq2(char('c', None), char('x', None)));
+    let failure = p.parse("ax").unwrap_err();
+    assert_that!(failure.context.position, eq(1));
+    assert_that!(failure.message, eq("expected 'b', but found 'x'"));
 }
