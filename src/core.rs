@@ -1,8 +1,7 @@
 use std::any::Any;
 use std::fmt::{write, Debug, Display};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::rc::Rc;
-use std::sync::Arc;
 use imstr::ImString;
 use unicode_categories::UnicodeCategories;
 use crate::context::{Context, ParseResult, Success, Failure};
