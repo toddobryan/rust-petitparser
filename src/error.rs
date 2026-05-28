@@ -1,12 +1,13 @@
 use std::fmt::{Display, Formatter};
-use crate::context::Failure;
-use crate::core::Shared;
+use std::rc::Rc;
 
-pub struct ParserError<'a> {
-    pub failure: &'a Failure<'a>,
+use crate::context::Failure;
+
+pub struct ParserError {
+    pub failure: Failure,
 }
 
-impl <'a> ParserError<'a> {
+impl ParserError {
     pub fn message(&self) -> &str {
         &self.failure.message
     }
@@ -15,14 +16,19 @@ impl <'a> ParserError<'a> {
         self.failure.context.position
     }
 
-    pub fn source(&self) -> Shared<Vec<char>> {
+    pub fn source(&self) -> Rc<[char]> {
         self.failure.context.buffer.clone()
     }
 }
 
-impl <'a> Display for ParserError<'a> {
+impl Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} at {}", self.failure.message, self.failure.context.to_position_string())
+        write!(
+            f,
+            "{} at {}",
+            self.failure.message,
+            self.failure.context.to_position_string()
+        )
     }
 }
 
