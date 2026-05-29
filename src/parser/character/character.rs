@@ -1,7 +1,7 @@
 use std::rc::Rc;
-
-use crate::context::{Context, ParseResult};
-use crate::core::Parser;
+use crate::core::context::Context;
+use crate::core::parser::Parser;
+use crate::core::result::ParseResult;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CharKind {
@@ -50,7 +50,7 @@ impl CharKind {
             CharKind::Lowercase => "lowercase letter".to_string(),
             CharKind::Uppercase => "uppercase letter".to_string(),
             CharKind::Whitespace => "whitespace".to_string(),
-            CharKind::Word => "word character".to_string(),
+            CharKind::Word => "word character (letter, digit, or '_')".to_string(),
         }
     }
 }
@@ -71,6 +71,10 @@ impl CharParser {
             Some(c) => format!("expected {}, but found '{}'", expected, c),
             None => format!("expected {}, but reached end of input", expected),
         }
+    }
+
+    pub fn with_message(self, message: &str) -> Self {
+        Self { message: Some(message.to_string()), ..self }
     }
 }
 
@@ -122,59 +126,58 @@ impl Parser<char> for PredicateCharParser {
     }
 }
 
-pub fn any(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Any, message: message.map(String::from) }
+pub fn any() -> CharParser {
+    CharParser { kind: CharKind::Any, message: None }
 }
 
-pub fn char(expected: char, message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Exact(expected), message: message.map(String::from) }
+pub fn char(c: char) -> CharParser {
+    CharParser { kind: CharKind::Exact(c), message: None }
 }
 
-pub fn letter(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Letter, message: message.map(String::from) }
+pub fn letter() -> CharParser {
+    CharParser { kind: CharKind::Letter, message: None }
 }
 
-pub fn digit(radix: Option<u32>, message: Option<&str>) -> CharParser {
+pub fn digit(radix: Option<u32>) -> CharParser {
     CharParser {
         kind: CharKind::Digit(radix.unwrap_or(10)),
-        message: message.map(String::from),
+        message: None,
     }
 }
 
-pub fn one_of(chars: &str, message: Option<&str>) -> CharParser {
+pub fn one_of(chars: &str) -> CharParser {
     CharParser {
         kind: CharKind::OneOf(chars.chars().collect()),
-        message: message.map(String::from),
+        message: None,
     }
 }
 
-pub fn none_of(chars: &str, message: Option<&str>) -> CharParser {
+pub fn none_of(chars: &str) -> CharParser {
     CharParser {
         kind: CharKind::NoneOf(chars.chars().collect()),
-        message: message.map(String::from),
+        message: None,
     }
 }
 
-pub fn lowercase(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Lowercase, message: message.map(String::from) }
+pub fn lowercase() -> CharParser {
+    CharParser { kind: CharKind::Lowercase, message: None }
 }
 
-pub fn uppercase(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Uppercase, message: message.map(String::from) }
+pub fn uppercase() -> CharParser {
+    CharParser { kind: CharKind::Uppercase, message: None }
 }
 
-pub fn whitespace(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Whitespace, message: message.map(String::from) }
+pub fn whitespace() -> CharParser {
+    CharParser { kind: CharKind::Whitespace, message: None }
 }
 
-pub fn word(message: Option<&str>) -> CharParser {
-    CharParser { kind: CharKind::Word, message: message.map(String::from) }
+pub fn word() -> CharParser {
+    CharParser { kind: CharKind::Word, message: None }
 }
 
 pub fn predicate<F>(
     test: F,
     description: impl Into<String>,
-    message: Option<&str>,
 ) -> PredicateCharParser
 where
     F: Fn(char) -> bool + 'static,
@@ -182,6 +185,6 @@ where
     PredicateCharParser {
         test: Rc::new(test),
         description: description.into(),
-        message: message.map(String::from),
+        message: None,
     }
 }
