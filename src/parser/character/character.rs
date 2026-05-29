@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::rc::Rc;
 use crate::core::context::Context;
 use crate::core::parser::Parser;
@@ -93,6 +94,7 @@ impl Parser<char> for CharParser {
     }
 }
 
+#[derive(Clone)]
 pub struct PredicateCharParser {
     pub test: Rc<dyn Fn(char) -> bool>,
     pub description: String,
@@ -108,6 +110,16 @@ impl PredicateCharParser {
             Some(c) => format!("expected {}, but found '{}'", self.description, c),
             None => format!("expected {}, but reached end of input", self.description),
         }
+    }
+}
+
+impl Debug for PredicateCharParser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PredicateCharParser")
+            .field("test", &"<predicate function>")
+            .field("description", &self.description)
+            .field("message", &self.message)
+            .finish()
     }
 }
 

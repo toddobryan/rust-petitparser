@@ -5,7 +5,7 @@ use crate::core::parser::Parser;
 use crate::matcher::matches::MatchesIterable;
 use crate::parser::action::map::MapParser;
 use crate::parser::action::token::TokenParser;
-use crate::parser::repeater::possessive::{OptParser, PlusParser, StarParser};
+use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 
 pub trait ParserExt<T>: Parser<T> + Sized {
     fn all_matches(self, buffer: Rc<[char]>, start: usize, overlapping: bool) -> MatchesIterable<T, Self> {
@@ -14,22 +14,26 @@ pub trait ParserExt<T>: Parser<T> + Sized {
 
     fn map<U, F: Fn(T) -> U>(self, f: F) -> MapParser<T, Self, F> {
         MapParser {
-            parser: self,
+            delegate: self,
             f,
-            orig_type: PhantomData,
+            from_type: PhantomData,
         }
     }
 
-    fn star(self) -> StarParser<Self> {
-        StarParser { parser: self }
+    fn rep(self, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+        PossessiveRepeatingParser { delegate: self, min, max }
     }
 
-    fn plus(self) -> PlusParser<Self> {
-        PlusParser { parser: self }
+    fn star(self) -> impl Parser<Vec<T>> {
+        self.rep(0, None)
     }
 
-    fn opt(self) -> OptParser<Self> {
-        OptParser { parser: self }
+    fn plus(self) ->  impl Parser<Vec<T>> {
+        self.rep(1, None)
+    }
+
+    fn opt(self) -> impl Parser<Option<T>> {
+        self.rep(0, Some(1)).map(|vec| vec.into_iter().next())
     }
 
     fn token(self) -> TokenParser<Self> {

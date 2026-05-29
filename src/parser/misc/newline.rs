@@ -3,6 +3,7 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 
+#[derive(Clone, Debug)]
 pub struct NewlineParser {
     pub message: Option<String>,
 }

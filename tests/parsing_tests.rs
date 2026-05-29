@@ -2,10 +2,15 @@ use std::rc::Rc;
 use rust_petitparser::parser::ext::ParserExt;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
-use rust_petitparser::core::token::Token;
+use rust_petitparser::core::token::{line_and_column_of, Token};
 use rust_petitparser::parser::character::character::char;
 use rust_petitparser::parser::combinator::choice::{choice2, choice3, Choice2, SELECT_FARTHEST_JOINED};
-use rust_petitparser::parser::combinator::sequence::{seq2, seq4};
+use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
+use rust_petitparser::parser::combinator::settable::SettableParser;
+
+fn buf(s: &str) -> Rc<[char]> {
+    s.chars().collect::<Vec<_>>().into()
+}
 
 #[gtest]
 fn character_test() {
@@ -152,15 +157,15 @@ fn plus_test() {
 }
 
 #[gtest]
-fn plus_with_epsilon_test() {
-    let p = char('x').opt().plus();
+fn plus_with_opt_test() {
+    let p = char('x').plus().opt();
     let success = p.parse("xxxy").unwrap();
     assert_that!(success.context.position, eq(3));
-    assert_that!(success.value, eq(&vec![Some('x'), Some('x'), Some('x')]));
+    assert_that!(success.value, eq(&Some(vec!['x', 'x', 'x'])));
 
     let success = p.parse("y").unwrap();
     assert_that!(success.context.position, eq(0));
-    assert_that!(success.value, eq(&vec![None]));
+    assert_that!(success.value, eq(&None));
 }
 
 #[gtest]
@@ -177,15 +182,20 @@ fn star_test() {
 }
 
 #[gtest]
-fn star_with_epsilon_test() {
-    let p = char('x').opt().star();
+fn star_with_opt_test() {
+    let p = char('x').star().opt();
     let success = p.parse("xxxy").unwrap();
     assert_that!(success.context.position, eq(3));
-    assert_that!(success.value, eq(&vec![Some('x'), Some('x'), Some('x')]));
+    assert_that!(success.value, eq(&Some(vec!['x', 'x', 'x'])));
+}
 
+#[gtest]
+#[should_panic(expected="")]
+fn star_with_opt_that_doesnt_consume_should_panic() {
+    let p = char('x').star().opt();
     let success = p.parse("y").unwrap();
     assert_that!(success.context.position, eq(0));
-    assert_that!(success.value, eq(&vec![]));
+    assert_that!(success.value, eq(&None));
 }
 
 #[gtest]
@@ -235,6 +245,103 @@ fn all_matches_non_overlapping() {
 }
 
 #[gtest]
+fn line_and_column_of_single_line() {
+    let b = buf("abc");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+}
+
+#[gtest]
+fn line_and_column_of_empty_buffer() {
+    let b = buf("");
+    assert_that!(line_and_column_of(b, 0), eq((1, 1)));
+}
+
+#[gtest]
+fn line_and_column_of_lf_newline() {
+    let b = buf("ab\ncd");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    // position on '\n' itself is still treated as line 1
+    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+    // first character after newline
+    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 1)));
+    assert_that!(line_and_column_of(b.clone(), 4), eq((2, 2)));
+}
+
+#[gtest]
+fn line_and_column_of_crlf_newline() {
+    let b = buf("a\r\nb");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    // position on '\r' — still line 1
+    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    // position on '\n' inside the \r\n token — still line 1
+    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+    // first character after \r\n
+    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 1)));
+}
+
+#[gtest]
+fn line_and_column_of_cr_newline() {
+    let b = buf("a\rb");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    // position on '\r' — still line 1
+    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    // first character after \r
+    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
+}
+
+#[gtest]
+fn line_and_column_of_multiple_lines() {
+    let b = buf("a\nb\nc");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
+    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 2)));
+    assert_that!(line_and_column_of(b.clone(), 4), eq((3, 1)));
+}
+
+#[gtest]
+fn line_and_column_of_position_past_end() {
+    let b = buf("ab\ncd");
+    // position equal to buffer length: column should be (len - last_offset + 1)
+    assert_that!(line_and_column_of(b, 5), eq((2, 3)));
+}
+
+#[gtest]
+fn line_and_column_of_blank_line() {
+    // two newlines in a row create an empty middle line
+    let b = buf("a\n\nb");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
+    assert_that!(line_and_column_of(b.clone(), 3), eq((3, 1)));
+}
+
+#[gtest]
+fn line_and_column_of_mixed_line_endings() {
+    // \n then \r then \r\n
+    let b = buf("a\nb\rc\r\nd");
+    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1))); // 'b'
+    assert_that!(line_and_column_of(b.clone(), 4), eq((3, 1))); // 'c'
+    assert_that!(line_and_column_of(b.clone(), 7), eq((4, 1))); // 'd'
+}
+
+#[gtest]
+fn token_line_and_column() {
+    // Verify Token::line() / Token::column() use the token's start position
+    let p = seq2(
+        seq2(char('a'), char('b')),
+        seq2(char('\n'), char('c').plus().token()),
+    )
+    .map(|((_, _), (_, t))| t);
+    let success = p.parse("ab\nccd").unwrap();
+    assert_that!(success.value.line(), eq(2));
+    assert_that!(success.value.column(), eq(1));
+}
+
+#[gtest]
 fn all_matches_overlapping() {
     let buffer: Rc<[char]> = "aaaa".chars().collect::<Vec<_>>().into();
     let matches: Vec<(char, char)> = seq2(char('a'), char('a'))
@@ -242,4 +349,16 @@ fn all_matches_overlapping() {
         .into_iter()
         .collect();
     assert_that!(matches, eq(&vec![('a', 'a'), ('a', 'a'), ('a', 'a')]));
+}
+
+#[gtest]
+fn nested_parens_settable_test() {
+    let mut expr = SettableParser::<i32>::undefined();
+    let inner = seq3(char('('), expr.clone(), char(')')).map(|(_,n,_)| n + 1);
+    let leaf = char('x').map(|_| 0);
+    expr.set(choice2(inner, leaf));
+
+    assert_eq!(expr.parse("x").unwrap().value, 0);
+    assert_eq!(expr.parse("(((x)))").unwrap().value, 3);
+    assert!(expr.parse("(x").is_err());
 }
