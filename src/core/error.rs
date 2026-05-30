@@ -1,6 +1,6 @@
+use crate::core::result::Failure;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
-use crate::core::result::Failure;
 
 pub struct ParserError {
     pub failure: Failure,

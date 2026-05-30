@@ -1,5 +1,5 @@
-use std::fmt::{Display, Formatter};
 use crate::core::context::Context;
+use std::fmt::{Display, Formatter};
 
 pub type ParseResult<T> = Result<Success<T>, Failure>;
 

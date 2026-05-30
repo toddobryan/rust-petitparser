@@ -1,7 +1,7 @@
-use std::fmt::Display;
-use std::rc::Rc;
 use crate::parser::ext::ParserExt;
 use crate::parser::misc::newline::newline;
+use std::fmt::Display;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Token<T> {
@@ -13,7 +13,12 @@ pub struct Token<T> {
 
 impl<T> Token<T> {
     pub fn new(value: T, buffer: Rc<[char]>, start: usize, end: usize) -> Self {
-        Self { value, buffer, start, end }
+        Self {
+            value,
+            buffer,
+            start,
+            end,
+        }
     }
 
     pub fn input(&self) -> &[char] {

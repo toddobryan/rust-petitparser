@@ -1,12 +1,17 @@
-use std::rc::Rc;
-use rust_petitparser::parser::ext::ParserExt;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
-use rust_petitparser::core::token::{line_and_column_of, Token};
+use rust_petitparser::core::token::{Token, line_and_column_of};
 use rust_petitparser::parser::character::character::char;
-use rust_petitparser::parser::combinator::choice::{choice2, choice3, Choice2, SELECT_FARTHEST_JOINED};
+use rust_petitparser::parser::character::character::letter;
+use rust_petitparser::parser::combinator::choice::{
+    Choice2, SELECT_FARTHEST_JOINED, choice2, choice3,
+};
 use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
 use rust_petitparser::parser::combinator::settable::SettableParser;
+use rust_petitparser::parser::ext::ParserExt;
+use rust_petitparser::parser::misc::end::eof;
+use rust_petitparser::parser::predicate::predicate::string;
+use std::rc::Rc;
 
 fn buf(s: &str) -> Rc<[char]> {
     s.chars().collect::<Vec<_>>().into()
@@ -80,7 +85,10 @@ fn choice2_test() {
 
 #[gtest]
 fn choice2_with_joiner_test() {
-    let p = Choice2 { joiner: SELECT_FARTHEST_JOINED, ..choice2(char('a'), char('b')) };
+    let p = Choice2 {
+        joiner: SELECT_FARTHEST_JOINED,
+        ..choice2(char('a'), char('b'))
+    };
     let success = p.parse("ac").unwrap();
     assert_that!(success.context.position, eq(1));
     assert_that!(success.value, eq('a'));
@@ -89,7 +97,10 @@ fn choice2_with_joiner_test() {
     assert_that!(success.value, eq('b'));
     let failure = p.parse("cc").unwrap_err();
     assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected 'a', but found 'c' OR expected 'b', but found 'c'"));
+    assert_that!(
+        failure.message,
+        eq("expected 'a', but found 'c' OR expected 'b', but found 'c'")
+    );
 }
 
 #[gtest]
@@ -190,7 +201,7 @@ fn star_with_opt_test() {
 }
 
 #[gtest]
-#[should_panic(expected="")]
+#[should_panic(expected = "")]
 fn star_with_opt_that_doesnt_consume_should_panic() {
     let p = char('x').star().opt();
     let success = p.parse("y").unwrap();
@@ -203,7 +214,8 @@ fn token_test() {
     let p = char('a').plus().token();
     let success = p.parse("aaab").unwrap();
     assert_that!(success.context.position, eq(3));
-    assert_that!(success.value,
+    assert_that!(
+        success.value,
         eq(&Token::new(
             vec!['a', 'a', 'a'],
             success.context.buffer.clone(),
@@ -216,21 +228,30 @@ fn token_test() {
 #[gtest]
 fn all_matches_basic() {
     let buffer: Rc<[char]> = "abacada".chars().collect::<Vec<_>>().into();
-    let matches: Vec<char> = char('a').all_matches(buffer, 0, false).into_iter().collect();
+    let matches: Vec<char> = char('a')
+        .all_matches(buffer, 0, false)
+        .into_iter()
+        .collect();
     assert_that!(matches, eq(&vec!['a', 'a', 'a', 'a']));
 }
 
 #[gtest]
 fn all_matches_none() {
     let buffer: Rc<[char]> = "bcdef".chars().collect::<Vec<_>>().into();
-    let matches: Vec<char> = char('a').all_matches(buffer, 0, false).into_iter().collect();
+    let matches: Vec<char> = char('a')
+        .all_matches(buffer, 0, false)
+        .into_iter()
+        .collect();
     assert_that!(matches, eq(&vec![]));
 }
 
 #[gtest]
 fn all_matches_start_position() {
     let buffer: Rc<[char]> = "aaba".chars().collect::<Vec<_>>().into();
-    let matches: Vec<char> = char('a').all_matches(buffer, 2, false).into_iter().collect();
+    let matches: Vec<char> = char('a')
+        .all_matches(buffer, 2, false)
+        .into_iter()
+        .collect();
     assert_that!(matches, eq(&vec!['a']));
 }
 
@@ -354,11 +375,148 @@ fn all_matches_overlapping() {
 #[gtest]
 fn nested_parens_settable_test() {
     let mut expr = SettableParser::<i32>::undefined();
-    let inner = seq3(char('('), expr.clone(), char(')')).map(|(_,n,_)| n + 1);
+    let inner = seq3(char('('), expr.clone(), char(')')).map(|(_, n, _)| n + 1);
     let leaf = char('x').map(|_| 0);
     expr.set(choice2(inner, leaf));
 
     assert_eq!(expr.parse("x").unwrap().value, 0);
     assert_eq!(expr.parse("(((x)))").unwrap().value, 3);
     assert!(expr.parse("(x").is_err());
+}
+
+#[gtest]
+fn eof_on_empty_input() {
+    let p = eof();
+    let success = p.parse("").unwrap();
+    assert_that!(success.context.position, eq(0));
+    assert_that!(success.value, eq(()));
+}
+
+#[gtest]
+fn eof_at_end_of_input() {
+    let p = seq2(char('a'), eof());
+    let success = p.parse("a").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value.0, eq('a'));
+}
+
+#[gtest]
+fn eof_fails_mid_input() {
+    let p = eof();
+    let failure = p.parse("a").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+}
+
+#[gtest]
+fn string_matches_literal() {
+    let p = string("hello");
+    let success = p.parse("hello world").unwrap();
+    assert_that!(success.context.position, eq(5));
+    assert_that!(success.value, eq("hello"));
+}
+
+#[gtest]
+fn string_fails_on_mismatch() {
+    let p = string("hello");
+    assert!(p.parse("world").is_err());
+}
+
+#[gtest]
+fn string_fails_on_short_input() {
+    let p = string("hello");
+    assert!(p.parse("hi").is_err());
+}
+
+#[gtest]
+fn string_followed_by_eof() {
+    let p = seq2(string("ok"), eof());
+    assert!(p.parse("ok").is_ok());
+    assert!(p.parse("ok!").is_err());
+}
+
+#[gtest]
+fn string_unicode() {
+    // "é" is 2 bytes in UTF-8 but 1 char — length must be in chars, not bytes
+    let p = string("héllo");
+    let success = p.parse("héllo world").unwrap();
+    assert_that!(success.context.position, eq(5));
+    assert_that!(success.value, eq("héllo"));
+}
+
+#[gtest]
+fn string_emoji() {
+    // 🎉 is 4 bytes in UTF-8 but 1 char
+    let p = string("🎉🎂");
+    let success = p.parse("🎉🎂 party").unwrap();
+    assert_that!(success.context.position, eq(2));
+    assert_that!(success.value, eq("🎉🎂"));
+}
+
+#[gtest]
+fn trim_test() {
+    let p = string("hello").trim();
+    let success = p.parse("  hello  ").unwrap();
+    assert_that!(success.context.position, eq(9));
+    assert_that!(success.value, eq("hello"));
+}
+
+#[gtest]
+fn and_succeeds_without_advancing() {
+    // and() succeeds and returns the value, but position stays at 0
+    let p = char('a').and();
+    let success = p.parse("abc").unwrap();
+    assert_that!(success.context.position, eq(0));
+    assert_that!(success.value, eq('a'));
+}
+
+#[gtest]
+fn and_fails_when_inner_fails() {
+    let p = char('z').and();
+    assert!(p.parse("abc").is_err());
+}
+
+#[gtest]
+fn and_as_lookahead_in_sequence() {
+    // Consume 'a' only if followed by 'b', using and() as lookahead then seq
+    let p = seq2(char('a'), char('b').and()).map(|(l, _)| l);
+    let success = p.parse("ab").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('a'));
+}
+
+#[gtest]
+fn not_succeeds_when_inner_fails() {
+    // not() on a digit succeeds when input is a letter (not a digit)
+    let p = seq2(char('b').not(), letter());
+    let result = p.parse("a").unwrap();
+    assert_that!(result.context.position, eq(1));
+    assert_that!(result.value.1, eq('a'));
+
+    let result = p.parse("b").unwrap_err();
+    assert_that!(result.context.position, eq(0));
+}
+
+#[gtest]
+fn not_fails_when_inner_succeeds() {
+    let p = char('a').not();
+    let failure = p.parse("abc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("Expected failure, got success: 'a'"))
+}
+
+#[gtest]
+fn not_succeeds_without_advancing() {
+    // not() on its own doesn't advance position
+    let p = seq2(char('z').not(), letter().star()).map(|(_, ls)| ls);
+    let success = p.parse("abc").unwrap();
+    assert_that!(success.context.position, eq(3));
+    assert_that!(success.value, eq(&vec!['a', 'b', 'c']));
+
+    let success = p.parse("yz").unwrap();
+    assert_that!(success.context.position, eq(2));
+    assert_that!(success.value, eq(&vec!['y', 'z']));
+
+    let failure = p.parse("zyx").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("Expected failure, got success: 'z'"));
 }

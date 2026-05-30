@@ -1,7 +1,7 @@
-use crate::core::result::ParseResult;
-use crate::core::parser::Parser;
 use crate::core::context::Context;
+use crate::core::parser::Parser;
 use crate::core::result::Failure;
+use crate::core::result::ParseResult;
 
 macro_rules! choice_impl {
     ($name:ident, $func:ident, $(($parser:ident , $value:ident)),+) => {
@@ -41,11 +41,61 @@ macro_rules! choice_impl {
 choice_impl!(Choice2, choice2, (P1, p1), (P2, p2));
 choice_impl!(Choice3, choice3, (P1, p1), (P2, p2), (P3, p3));
 choice_impl!(Choice4, choice4, (P1, p1), (P2, p2), (P3, p3), (P4, p4));
-choice_impl!(Choice5, choice5, (P1, p1), (P2, p2), (P3, p3), (P4, p4), (P5, p5));
-choice_impl!(Choice6, choice6, (P1, p1), (P2, p2), (P3, p3), (P4, p4), (P5, p5), (P6, p6));
-choice_impl!(Choice7, choice7, (P1, p1), (P2, p2), (P3, p3), (P4, p4), (P5, p5), (P6, p6), (P7, p7));
-choice_impl!(Choice8, choice8, (P1, p1), (P2, p2), (P3, p3), (P4, p4), (P5, p5), (P6, p6), (P7, p7), (P8, p8));
-choice_impl!(Choice9, choice9, (P1, p1), (P2, p2), (P3, p3), (P4, p4), (P5, p5), (P6, p6), (P7, p7), (P8, p8), (P9, p9));
+choice_impl!(
+    Choice5,
+    choice5,
+    (P1, p1),
+    (P2, p2),
+    (P3, p3),
+    (P4, p4),
+    (P5, p5)
+);
+choice_impl!(
+    Choice6,
+    choice6,
+    (P1, p1),
+    (P2, p2),
+    (P3, p3),
+    (P4, p4),
+    (P5, p5),
+    (P6, p6)
+);
+choice_impl!(
+    Choice7,
+    choice7,
+    (P1, p1),
+    (P2, p2),
+    (P3, p3),
+    (P4, p4),
+    (P5, p5),
+    (P6, p6),
+    (P7, p7)
+);
+choice_impl!(
+    Choice8,
+    choice8,
+    (P1, p1),
+    (P2, p2),
+    (P3, p3),
+    (P4, p4),
+    (P5, p5),
+    (P6, p6),
+    (P7, p7),
+    (P8, p8)
+);
+choice_impl!(
+    Choice9,
+    choice9,
+    (P1, p1),
+    (P2, p2),
+    (P3, p3),
+    (P4, p4),
+    (P5, p5),
+    (P6, p6),
+    (P7, p7),
+    (P8, p8),
+    (P9, p9)
+);
 
 pub type FailureJoiner = fn(Failure, Failure) -> Failure;
 
@@ -65,7 +115,8 @@ pub static SELECT_FARTHEST_JOINED: FailureJoiner = |failure1, failure2| {
         failure1
     } else {
         Failure {
-            context: failure1.context ,
-            message: format!("{} OR {}", failure1.message, failure2.message)}
+            context: failure1.context,
+            message: format!("{} OR {}", failure1.message, failure2.message),
+        }
     }
 };

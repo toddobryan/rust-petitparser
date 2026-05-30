@@ -1,8 +1,8 @@
-use std::fmt::Debug;
-use std::rc::Rc;
 use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CharKind {
@@ -75,7 +75,10 @@ impl CharParser {
     }
 
     pub fn with_message(self, message: &str) -> Self {
-        Self { message: Some(message.to_string()), ..self }
+        Self {
+            message: Some(message.to_string()),
+            ..self
+        }
     }
 }
 
@@ -139,15 +142,24 @@ impl Parser<char> for PredicateCharParser {
 }
 
 pub fn any() -> CharParser {
-    CharParser { kind: CharKind::Any, message: None }
+    CharParser {
+        kind: CharKind::Any,
+        message: None,
+    }
 }
 
 pub fn char(c: char) -> CharParser {
-    CharParser { kind: CharKind::Exact(c), message: None }
+    CharParser {
+        kind: CharKind::Exact(c),
+        message: None,
+    }
 }
 
 pub fn letter() -> CharParser {
-    CharParser { kind: CharKind::Letter, message: None }
+    CharParser {
+        kind: CharKind::Letter,
+        message: None,
+    }
 }
 
 pub fn digit(radix: Option<u32>) -> CharParser {
@@ -172,25 +184,34 @@ pub fn none_of(chars: &str) -> CharParser {
 }
 
 pub fn lowercase() -> CharParser {
-    CharParser { kind: CharKind::Lowercase, message: None }
+    CharParser {
+        kind: CharKind::Lowercase,
+        message: None,
+    }
 }
 
 pub fn uppercase() -> CharParser {
-    CharParser { kind: CharKind::Uppercase, message: None }
+    CharParser {
+        kind: CharKind::Uppercase,
+        message: None,
+    }
 }
 
 pub fn whitespace() -> CharParser {
-    CharParser { kind: CharKind::Whitespace, message: None }
+    CharParser {
+        kind: CharKind::Whitespace,
+        message: None,
+    }
 }
 
 pub fn word() -> CharParser {
-    CharParser { kind: CharKind::Word, message: None }
+    CharParser {
+        kind: CharKind::Word,
+        message: None,
+    }
 }
 
-pub fn predicate<F>(
-    test: F,
-    description: impl Into<String>,
-) -> PredicateCharParser
+pub fn predicate<F>(test: F, description: impl Into<String>) -> PredicateCharParser
 where
     F: Fn(char) -> bool + 'static,
 {

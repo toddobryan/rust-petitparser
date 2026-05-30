@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::core::token::position_string;
+use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -16,14 +16,20 @@ impl Context {
 
     pub fn success<T>(&self, value: T, position: usize) -> ParseResult<T> {
         Ok(Success {
-            context: Context { buffer: self.buffer.clone(), position },
+            context: Context {
+                buffer: self.buffer.clone(),
+                position,
+            },
             value,
         })
     }
 
     pub fn failure<T>(&self, message: impl Into<String>, position: usize) -> ParseResult<T> {
         Err(Failure {
-            context: Context { buffer: self.buffer.clone(), position },
+            context: Context {
+                buffer: self.buffer.clone(),
+                position,
+            },
             message: message.into(),
         })
     }

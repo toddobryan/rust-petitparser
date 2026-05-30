@@ -8,7 +8,10 @@ pub struct TokenParser<P> {
     pub parser: P,
 }
 
-impl <T, P> Parser<Token<T>> for TokenParser<P> where P: Parser<T> {
+impl<T, P> Parser<Token<T>> for TokenParser<P>
+where
+    P: Parser<T>,
+{
     fn parse_on(&self, context: &Context) -> ParseResult<Token<T>> {
         match self.parser.parse_on(context) {
             Err(e) => Err(e),
@@ -18,8 +21,8 @@ impl <T, P> Parser<Token<T>> for TokenParser<P> where P: Parser<T> {
                     s.value,
                     context.buffer.clone(),
                     context.position,
-                    s.context.position
-                )
+                    s.context.position,
+                ),
             }),
         }
     }

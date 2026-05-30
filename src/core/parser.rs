@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-use std::rc::Rc;
 use crate::core::context::Context;
 use crate::core::result::ParseResult;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 pub trait Parser<T>: Debug {
     fn parse_on(&self, context: &Context) -> ParseResult<T>;

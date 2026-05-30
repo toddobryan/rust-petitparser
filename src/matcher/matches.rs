@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
 use crate::core::context::Context;
 use crate::core::parser::Parser;
+use std::marker::PhantomData;
 
 pub struct MatchesIterator<T, P> {
     pub parser: P,
@@ -9,7 +9,9 @@ pub struct MatchesIterator<T, P> {
     _parsed: PhantomData<T>,
 }
 
-impl <T, P> Iterator for MatchesIterator<T, P> where P: Parser<T>,
+impl<T, P> Iterator for MatchesIterator<T, P>
+where
+    P: Parser<T>,
 {
     type Item = T;
 
@@ -23,7 +25,7 @@ impl <T, P> Iterator for MatchesIterator<T, P> where P: Parser<T>,
                         self.context.position = s.context.position;
                     }
                     return Some(s.value);
-                },
+                }
                 Err(_) => {
                     self.context.position += 1;
                 }
@@ -40,7 +42,10 @@ pub struct MatchesIterable<T, P> {
     pub parser_type: PhantomData<T>,
 }
 
-impl <T, P> IntoIterator for MatchesIterable<T, P> where P: Parser<T> {
+impl<T, P> IntoIterator for MatchesIterable<T, P>
+where
+    P: Parser<T>,
+{
     type Item = T;
     type IntoIter = MatchesIterator<Self::Item, P>;
 

@@ -1,7 +1,7 @@
-use crate::core::result::ParseResult;
-use crate::core::parser::Parser;
-use crate::core::result::Success;
 use crate::core::context::Context;
+use crate::core::parser::Parser;
+use crate::core::result::ParseResult;
+use crate::core::result::Success;
 
 macro_rules! impl_seq {
     ($name:ident, $func:ident, $(($parser:ident, $value:ident, $field:ident)),+$(,)?) => {

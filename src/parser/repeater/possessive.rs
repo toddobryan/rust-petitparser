@@ -1,7 +1,7 @@
-use std::rc::Rc;
 use crate::core::context::Context;
 use crate::core::parser::Parser;
-use crate::core::result::{ParseResult, Success};
+use crate::core::result::ParseResult;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct PossessiveRepeatingParser<P> {
@@ -10,7 +10,10 @@ pub struct PossessiveRepeatingParser<P> {
     pub max: Option<usize>,
 }
 
-impl <T, P> Parser<Vec<T>> for PossessiveRepeatingParser<P> where P: Parser<T> {
+impl<T, P> Parser<Vec<T>> for PossessiveRepeatingParser<P>
+where
+    P: Parser<T>,
+{
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let mut elements: Vec<T> = vec![];
         let mut ctx: Context = context.clone();
@@ -18,7 +21,11 @@ impl <T, P> Parser<Vec<T>> for PossessiveRepeatingParser<P> where P: Parser<T> {
             let result = self.delegate.parse_on(&ctx);
             match result {
                 Ok(s) => {
-                    assert!(ctx.position < s.context.position, "{:?} must consume input", self.delegate);
+                    assert!(
+                        ctx.position < s.context.position,
+                        "{:?} must consume input",
+                        self.delegate
+                    );
                     elements.push(s.value);
                     ctx = s.context;
                 }
@@ -29,7 +36,11 @@ impl <T, P> Parser<Vec<T>> for PossessiveRepeatingParser<P> where P: Parser<T> {
             let result = self.delegate.parse_on(&ctx);
             match result {
                 Ok(s) => {
-                    assert!(ctx.position < s.context.position, "{:?} must consume input", self.delegate);
+                    assert!(
+                        ctx.position < s.context.position,
+                        "{:?} must consume input",
+                        self.delegate
+                    );
                     elements.push(s.value);
                     ctx = s.context;
                 }
