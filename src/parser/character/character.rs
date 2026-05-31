@@ -8,10 +8,13 @@ use std::rc::Rc;
 pub enum CharKind {
     Any,
     Exact(char),
+    ExactCi(char),
     Letter,
     Digit(u32),
     OneOf(Vec<char>),
+    OneOfCi(Vec<char>),
     NoneOf(Vec<char>),
+    NoneOfCi(Vec<char>),
     Lowercase,
     Uppercase,
     Whitespace,
@@ -23,10 +26,17 @@ impl CharKind {
         match self {
             CharKind::Any => true,
             CharKind::Exact(expected) => c == *expected,
+            CharKind::ExactCi(expected) => c.to_ascii_lowercase() == expected.to_ascii_lowercase(),
             CharKind::Letter => c.is_alphabetic(),
             CharKind::Digit(radix) => c.is_digit(*radix),
             CharKind::OneOf(chars) => chars.contains(&c),
+            CharKind::OneOfCi(chars) => 
+                chars.into_iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
+                    .contains(&c.to_ascii_lowercase()),
             CharKind::NoneOf(chars) => !chars.contains(&c),
+            CharKind::NoneOfCi(chars) => 
+                !chars.into_iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
+                    .contains(&c.to_ascii_lowercase()),
             CharKind::Lowercase => c.is_lowercase(),
             CharKind::Uppercase => c.is_uppercase(),
             CharKind::Whitespace => c.is_whitespace(),
@@ -38,6 +48,7 @@ impl CharKind {
         match self {
             CharKind::Any => "any character".to_string(),
             CharKind::Exact(c) => format!("'{}'", c),
+            CharKind::ExactCi(c) => format!("'{}' (case-insensitive)", c),
             CharKind::Letter => "letter".to_string(),
             CharKind::Digit(radix) => {
                 if *radix == 10 {
@@ -47,7 +58,9 @@ impl CharKind {
                 }
             }
             CharKind::OneOf(chars) => format!("any of {:?}", chars),
+            CharKind::OneOfCi(chars) => format!("any of {:?} (case-insensitive)", chars),
             CharKind::NoneOf(chars) => format!("none of {:?}", chars),
+            CharKind::NoneOfCi(chars) => format!("none of {:?} (case-insensitive)", chars),
             CharKind::Lowercase => "lowercase letter".to_string(),
             CharKind::Uppercase => "uppercase letter".to_string(),
             CharKind::Whitespace => "whitespace".to_string(),
@@ -143,14 +156,20 @@ impl Parser<char> for PredicateCharParser {
 
 pub fn any() -> CharParser {
     CharParser {
-        kind: CharKind::Any,
-        message: None,
+        kind: CharKind::Any,        message: None,
     }
 }
 
 pub fn char(c: char) -> CharParser {
     CharParser {
         kind: CharKind::Exact(c),
+        message: None,
+    }
+}
+
+pub fn char_ci(c: char) -> CharParser {
+    CharParser {
+        kind: CharKind::ExactCi(c),
         message: None,
     }
 }
@@ -180,9 +199,23 @@ pub fn one_of(chars: &str) -> CharParser {
     }
 }
 
+pub fn one_of_ci(chars: &str) -> CharParser {
+    CharParser {
+        kind: CharKind::OneOfCi(chars.chars().collect()),
+        message: None,
+    }
+}
+
 pub fn none_of(chars: &str) -> CharParser {
     CharParser {
         kind: CharKind::NoneOf(chars.chars().collect()),
+        message: None,
+    }
+}
+
+pub fn none_of_ci(chars: &str) -> CharParser {
+    CharParser {
+        kind: CharKind::NoneOfCi(chars.chars().collect()),
         message: None,
     }
 }

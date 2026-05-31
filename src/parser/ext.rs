@@ -1,6 +1,6 @@
 use crate::core::context::Context;
 use crate::core::parser::Parser;
-use crate::core::result::Failure;
+use crate::core::result::{Failure, ParseResult, Success};
 use crate::matcher::matches::MatchesIterable;
 use crate::parser::action::map::MapParser;
 use crate::parser::action::token::TokenParser;
@@ -12,6 +12,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use crate::parser::action::input::InputParser;
+use crate::parser::action::only_if::OnlyIfParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
 
 pub trait ParserExt<T>: Parser<T> + Sized
@@ -43,12 +44,16 @@ where
         }
     }
 
-    fn rep(self, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+    fn rep(self, min: usize, max: Option<usize>) -> PossessiveRepeatingParser<Self> {
         PossessiveRepeatingParser {
             delegate: self,
             min,
             max,
         }
+    }
+
+    fn times(self, num: usize) -> PossessiveRepeatingParser<Self>  {
+        self.rep(num, Some(num))
     }
 
     fn rep_sep<S: Debug>(self, sep: impl Parser<S>, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
@@ -116,6 +121,36 @@ where
         InputParser {
             delegate: self,
             message: Some(message),
+            delegate_type: PhantomData,
+        }
+    }
+
+    fn only_if(self, pred: fn(&T) -> bool) -> OnlyIfParser<Self, T> {
+        OnlyIfParser {
+            delegate: self,
+            predicate: pred,
+            factory: None,
+            message: None,
+            delegate_type: PhantomData,
+        }
+    }
+
+    fn only_if_with_message(self, pred: fn(&T) -> bool, message: String) -> OnlyIfParser<Self, T> {
+        OnlyIfParser {
+            delegate: self,
+            predicate: pred,
+            factory: None,
+            message: Some(message),
+            delegate_type: PhantomData,
+        }
+    }
+
+    fn only_if_with_factory(self, pred: fn(&T) -> bool, factory: fn(&Context, Success<T>) -> ParseResult<T>) -> OnlyIfParser<Self, T> {
+        OnlyIfParser {
+            delegate: self,
+            predicate: pred,
+            factory: Some(factory),
+            message: None,
             delegate_type: PhantomData,
         }
     }

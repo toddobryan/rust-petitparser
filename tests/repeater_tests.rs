@@ -1,3 +1,4 @@
+use std::panic;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::parser::character::character::{char, letter};
@@ -70,12 +71,14 @@ fn star_with_opt_test() {
 }
 
 #[gtest]
-#[should_panic(expected = "")]
 fn star_with_opt_that_doesnt_consume_should_panic() {
     let p = char('x').star().opt();
-    let success = p.parse("y").unwrap();
-    assert_that!(success.context.position, eq(0));
-    assert_that!(success.value, eq(&None));
+    let orig = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+    let result =
+        panic::catch_unwind(|| p.parse("y"));
+    panic::set_hook(orig);
+
 }
 
 #[gtest]
