@@ -54,15 +54,10 @@ where
         let mut count: usize = 0;
         let mut current = position;
         while count < self.min {
-            let result: Option<usize> = self.delegate.fast_parse_on(buffer.clone(), current);
-            match result {
-                None => return None,
-                Some(new_pos) => {
-                    assert!(current < new_pos, "{:?} must consume input", self.delegate);
-                    count += 1;
-                    current = new_pos;
-                }
-            }
+            let new_pos: usize = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            assert!(current < new_pos, "{:?} must consume input", self.delegate);
+            count += 1;
+            current = new_pos;
         }
         while self.max.is_none() || count < self.max.unwrap() {
             let result: Option<usize> = self.delegate.fast_parse_on(buffer.clone(), current);

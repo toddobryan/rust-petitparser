@@ -162,9 +162,13 @@ pub fn letter() -> CharParser {
     }
 }
 
-pub fn digit(radix: Option<u32>) -> CharParser {
+pub fn digit() -> CharParser {
+    digit_with_radix(10)
+}
+
+pub fn digit_with_radix(radix: u32) -> CharParser {
     CharParser {
-        kind: CharKind::Digit(radix.unwrap_or(10)),
+        kind: CharKind::Digit(radix),
         message: None,
     }
 }

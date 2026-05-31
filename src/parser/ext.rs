@@ -11,6 +11,8 @@ use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use crate::parser::action::input::InputParser;
+use crate::parser::repeater::separated::SeparatedRepeatingParser;
 
 pub trait ParserExt<T>: Parser<T> + Sized
 where
@@ -49,12 +51,31 @@ where
         }
     }
 
+    fn rep_sep<S: Debug>(self, sep: impl Parser<S>, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+        SeparatedRepeatingParser {
+            delegate: self,
+            separator: sep,
+            min,
+            max,
+            delegate_type: PhantomData,
+            separator_type: PhantomData,
+        }
+    }
+
     fn star(self) -> impl Parser<Vec<T>> {
         self.rep(0, None)
     }
 
+    fn star_sep<S: Debug>(self, sep: impl Parser<S>) -> impl Parser<Vec<T>> {
+        self.rep_sep(sep, 0, None)
+    }
+
     fn plus(self) -> impl Parser<Vec<T>> {
         self.rep(1, None)
+    }
+
+    fn plus_sep<S: Debug>(self, sep: impl Parser<S>) -> impl Parser<Vec<T>> {
+        self.rep_sep(sep, 1, None)
     }
 
     fn opt(self) -> impl Parser<Option<T>> {
@@ -79,6 +100,22 @@ where
     fn not(self) -> impl Parser<Failure> {
         NotParser {
             delegate: self,
+            delegate_type: PhantomData,
+        }
+    }
+
+    fn input(self) -> impl Parser<String> {
+        InputParser {
+            delegate: self,
+            message: None,
+            delegate_type: PhantomData,
+        }
+    }
+
+    fn input_with_message(self, message: String) -> impl Parser<String> {
+        InputParser {
+            delegate: self,
+            message: Some(message),
             delegate_type: PhantomData,
         }
     }
