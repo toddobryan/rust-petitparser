@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
@@ -17,20 +18,16 @@ where
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let mut elements: Vec<T> = vec![];
         let mut ctx: Context = context.clone();
+
         while elements.len() < self.min {
-            let result = self.delegate.parse_on(&ctx);
-            match result {
-                Ok(s) => {
-                    assert!(
-                        ctx.position < s.context.position,
-                        "{:?} must consume input",
-                        self.delegate
-                    );
-                    elements.push(s.value);
-                    ctx = s.context;
-                }
-                Err(f) => return Err(f),
-            }
+            let result = self.delegate.parse_on(&ctx)?;
+            assert!(
+                ctx.position < result.context.position,
+                "{:?} must consume input",
+                self.delegate
+            );
+            elements.push(result.value);
+            ctx = result.context;
         }
         while self.max.is_none() || elements.len() < self.max.unwrap() {
             let result = self.delegate.parse_on(&ctx);

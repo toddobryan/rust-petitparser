@@ -1,4 +1,4 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -96,10 +96,10 @@ impl CharParser {
 }
 
 impl Parser<char> for CharParser {
-    fn parse_on(&self, context: &Context) -> ParseResult<char> {
+    fn parse_on(&self, context: &impl HasContext) -> ParseResult<char> {
         let pos = context.position;
         if pos >= context.buffer.len() {
-            return context.failure(self.message_for(None), pos);
+            return context.failure(self.message_for(None));
         }
         let c = context.buffer[pos];
         if self.kind.matches(c) {

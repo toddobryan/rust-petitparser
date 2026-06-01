@@ -4,31 +4,61 @@ use rust_petitparser::parser::character::character::{
     any, char, char_ci, digit, digit_with_radix, letter, lowercase, none_of, none_of_ci, one_of,
     one_of_ci, predicate, uppercase, whitespace, word,
 };
+use std::rc::Rc;
+
+fn buf(s: &str) -> Rc<[char]> {
+    s.chars().collect::<Vec<_>>().into()
+}
+
+macro_rules! assert_success {
+    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
+        let result = $parser.parse($input);
+        if result.is_err() {
+            panic!("Expected success, but got {:?}", result.unwrap_err());
+        }
+        let result = result.unwrap();
+        assert_that!(result.value, eq($value));
+        assert_that!(result.context.position, eq($pos));
+
+        let pos = $parser.fast_parse_on(buf($input), 0);
+        if pos.is_none() {
+            panic!("Expected position after successful parse, but got None");
+        }
+        let pos = pos.unwrap();
+        assert_that!(pos, eq($pos));
+    }
+}
+
+macro_rules! assert_failure {
+    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
+        let result = $parser.parse($input);
+        if result.is_ok() {
+            panic!("Expected failure, but got success {:?}", result.unwrap());
+        }
+        let failure = result.unwrap_err();
+        assert_that!(failure.message, eq($message));
+        assert_that!(failure.context.position, eq($pos));
+
+        let pos = $parser.fast_parse_on(buf($input), 0);
+        assert_that!(pos, eq(None));
+    }
+}
 
 // char
 
 #[gtest]
 fn char_matches() {
-    let success = char('a').parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(char('a'), "abc", 'a', 1);
 }
 
 #[gtest]
 fn char_fails_on_wrong_char() {
-    let failure = char('a').parse("bc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected 'a', but found 'b'"));
+    assert_failure!(char('a'), "bc", "expected 'a', but found 'b'", 0);
 }
 
 #[gtest]
 fn char_fails_at_end_of_input() {
-    let failure = char('a').parse("").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected 'a', but reached end of input")
-    );
+    assert_failure!(char('a'), "", "expected 'a', but reached end of input", 0);
 }
 
 #[gtest]
@@ -45,77 +75,51 @@ fn char_parser_equality() {
 
 #[gtest]
 fn any_matches_any_char() {
-    let success = any().parse("xyz").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('x'));
+    assert_success!(any(), "xyz", 'x', 1);
 }
 
 #[gtest]
 fn any_fails_at_end_of_input() {
-    let failure = any().parse("").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected any character, but reached end of input")
-    );
+    assert_failure!(any(), "", "expected any character, but reached end of input", 0);
 }
 
 // letter
 
 #[gtest]
 fn letter_matches_letter() {
-    let success = letter().parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(letter(), "abc", 'a', 1);
 }
 
 #[gtest]
 fn letter_fails_on_digit() {
-    let failure = letter().parse("1bc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected letter, but found '1'"));
+    assert_failure!(letter(), "1bc", "expected letter, but found '1'", 0);
 }
 
 #[gtest]
 fn letter_fails_at_end_of_input() {
-    let failure = letter().parse("").unwrap_err();
-    assert_that!(
-        failure.message,
-        eq("expected letter, but reached end of input")
-    );
+    assert_failure!(letter(), "", "expected letter, but reached end of input", 0);
 }
 
 // digit
 
 #[gtest]
 fn digit_matches_decimal() {
-    let success = digit().parse("5abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('5'));
+    assert_success!(digit(), "5abc", '5', 1);
 }
 
 #[gtest]
 fn digit_fails_on_letter() {
-    let failure = digit().parse("abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected digit, but found 'a'"));
+    assert_failure!(digit(), "abc", "expected digit, but found 'a'", 0);
 }
 
 #[gtest]
 fn digit_hex_matches_hex_char() {
-    let success = digit_with_radix(16).parse("f0").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('f'));
+    assert_success!(digit_with_radix(16), "f0", 'f', 1);
 }
 
 #[gtest]
 fn digit_hex_fails_on_non_hex() {
-    let failure = digit_with_radix(16).parse("gz").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected digit (radix 16), but found 'g'")
-    );
+    assert_failure!(digit_with_radix(16), "gz", "expected digit (radix 16), but found 'g'", 0);
 }
 
 // one_of / none_of
@@ -123,9 +127,7 @@ fn digit_hex_fails_on_non_hex() {
 #[gtest]
 fn one_of_matches() {
     let p = one_of("aeiou");
-    let success = p.parse("eel").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('e'));
+    assert_success!(p, "eel", 'e', 1);
 }
 
 #[gtest]
@@ -138,9 +140,7 @@ fn one_of_fails_on_non_member() {
 #[gtest]
 fn none_of_matches_non_member() {
     let p = none_of("aeiou");
-    let success = p.parse("xyz").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('x'));
+    assert_success!(p, "xyz", 'x', 1);
 }
 
 #[gtest]
@@ -154,92 +154,61 @@ fn none_of_fails_on_member() {
 
 #[gtest]
 fn lowercase_matches() {
-    let success = lowercase().parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(lowercase(), "abc", 'a', 1);
 }
 
 #[gtest]
 fn lowercase_fails_on_uppercase() {
-    let failure = lowercase().parse("Abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected lowercase letter, but found 'A'")
-    );
+    assert_failure!(lowercase(), "Abc", "expected lowercase letter, but found 'A'", 0);
 }
 
 #[gtest]
 fn uppercase_matches() {
-    let success = uppercase().parse("ABC").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('A'));
+    assert_success!(uppercase(), "ABC", 'A', 1);
 }
 
 #[gtest]
 fn uppercase_fails_on_lowercase() {
-    let failure = uppercase().parse("abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected uppercase letter, but found 'a'")
-    );
+    assert_failure!(uppercase(), "abc", "expected uppercase letter, but found 'a'", 0);
 }
 
 // whitespace
 
 #[gtest]
 fn whitespace_matches_space() {
-    let success = whitespace().parse(" x").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq(' '));
+    assert_success!(whitespace(), " x", ' ', 1);
 }
 
 #[gtest]
 fn whitespace_matches_tab() {
-    let success = whitespace().parse("\tx").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('\t'));
+    assert_success!(whitespace(), "\tx", '\t', 1);
 }
 
 #[gtest]
 fn whitespace_fails_on_letter() {
-    let failure = whitespace().parse("abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected whitespace, but found 'a'"));
+    assert_failure!(whitespace(), "abc", "expected whitespace, but found 'a'", 0);
 }
 
 // word
 
 #[gtest]
 fn word_matches_letter() {
-    let success = word().parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(word(), "abc", 'a', 1);
 }
 
 #[gtest]
 fn word_matches_digit() {
-    let success = word().parse("1bc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('1'));
+    assert_success!(word(), "1bc", '1', 1);
 }
 
 #[gtest]
 fn word_matches_underscore() {
-    let success = word().parse("_x").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('_'));
+    assert_success!(word(), "_x", '_', 1);
 }
 
 #[gtest]
 fn word_fails_on_space() {
-    let failure = word().parse(" abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(
-        failure.message,
-        eq("expected word character (letter, digit, or '_'), but found ' '")
-    );
+    assert_failure!(word(), " abc", "expected word character (letter, digit, or '_'), but found ' '", 0);
 }
 
 // predicate
@@ -247,76 +216,57 @@ fn word_fails_on_space() {
 #[gtest]
 fn predicate_matches() {
     let p = predicate(|c| c == 'x' || c == 'y', "x or y");
-    let success = p.parse("xz").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('x'));
+    assert_success!(p, "xz", 'x', 1);
 }
 
 #[gtest]
 fn predicate_fails() {
     let p = predicate(|c| c == 'x' || c == 'y', "x or y");
-    let failure = p.parse("az").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected x or y, but found 'a'"));
+    assert_failure!(p, "az", "expected x or y, but found 'a'", 0);
 }
 
 // char_ci
 
 #[gtest]
 fn char_ci_matches_same_case() {
-    let success = char_ci('a').parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(char_ci('a'), "abc", 'a', 1);
 }
 
 #[gtest]
 fn char_ci_matches_opposite_case() {
-    let success = char_ci('a').parse("Abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('A'));
+    assert_success!(char_ci('a'), "Abc", 'A', 1);
 }
 
 #[gtest]
 fn char_ci_uppercase_pattern_matches_lowercase() {
-    let success = char_ci('A').parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('a'));
+    assert_success!(char_ci('A'), "abc", 'a', 1);
 }
 
 #[gtest]
 fn char_ci_fails_on_different_char() {
-    let failure = char_ci('a').parse("bcd").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected 'a' (case-insensitive), but found 'b'"));
+    assert_failure!(char_ci('a'), "bcd", "expected 'a' (case-insensitive), but found 'b'", 0);
 }
 
 #[gtest]
 fn char_ci_fails_at_end_of_input() {
-    let failure = char_ci('a').parse("").unwrap_err();
-    assert_that!(failure.message, eq("expected 'a' (case-insensitive), but reached end of input"));
+    assert_failure!(char_ci('a'), "", "expected 'a' (case-insensitive), but reached end of input", 0);
 }
 
 // one_of_ci
 
 #[gtest]
 fn one_of_ci_matches_lowercase() {
-    let success = one_of_ci("aeiou").parse("eel").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('e'));
+    assert_success!(one_of_ci("aeiou"), "eel", 'e', 1);
 }
 
 #[gtest]
 fn one_of_ci_matches_uppercase() {
-    let success = one_of_ci("aeiou").parse("Eel").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('E'));
+    assert_success!(one_of_ci("aeiou"), "Eel", 'E', 1);
 }
 
 #[gtest]
 fn one_of_ci_uppercase_pattern_matches_lowercase() {
-    let success = one_of_ci("AEIOU").parse("eel").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('e'));
+    assert_success!(one_of_ci("AEIOU"), "eel", 'e', 1);
 }
 
 #[gtest]
@@ -329,9 +279,7 @@ fn one_of_ci_fails_on_non_member() {
 
 #[gtest]
 fn none_of_ci_matches_non_member() {
-    let success = none_of_ci("aeiou").parse("xyz").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('x'));
+    assert_success!(none_of_ci("aeiou"), "xyz", 'x', 1);
 }
 
 #[gtest]
@@ -357,13 +305,11 @@ fn none_of_ci_uppercase_pattern_fails_on_lowercase() {
 #[gtest]
 fn with_message_overrides_default() {
     let p = char('a').with_message("need an 'a' here");
-    let failure = p.parse("b").unwrap_err();
-    assert_that!(failure.message, eq("need an 'a' here"));
+    assert_failure!(p, "b", "need an 'a' here", 0);
 }
 
 #[gtest]
 fn with_message_at_end_of_input() {
     let p = letter().with_message("expected a letter");
-    let failure = p.parse("").unwrap_err();
-    assert_that!(failure.message, eq("expected a letter"));
+    assert_failure!(p, "", "expected a letter", 0);
 }

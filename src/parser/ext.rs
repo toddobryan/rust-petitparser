@@ -16,6 +16,7 @@ use crate::parser::action::input::InputParser;
 use crate::parser::action::only_if::OnlyIfParser;
 use crate::parser::combinator::skip::SkipParser;
 use crate::parser::misc::label::LabeledParser;
+use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
 
 pub trait ParserExt<T>: Parser<T> + Sized
@@ -55,6 +56,17 @@ where
         }
     }
 
+    fn rep_lazy<S: Debug>(self, limit: impl Parser<S>, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+        LazyRepeatingParser {
+            delegate: self,
+            limit,
+            min,
+            max,
+            delegate_type: PhantomData,
+            limit_type: PhantomData,
+        }
+    }
+
     fn times(self, num: usize) -> PossessiveRepeatingParser<Self>  {
         self.rep(num, Some(num))
     }
@@ -78,12 +90,34 @@ where
         self.rep_sep(sep, 0, None)
     }
 
+    fn star_lazy<L: Debug>(self, limit: impl Parser<L>) -> impl Parser<Vec<T>> {
+        LazyRepeatingParser {
+            delegate: self,
+            limit,
+            min: 0,
+            max: None,
+            delegate_type: PhantomData,
+            limit_type: PhantomData,
+        }
+    }
+
     fn plus(self) -> impl Parser<Vec<T>> {
         self.rep(1, None)
     }
 
     fn plus_sep<S: Debug>(self, sep: impl Parser<S>) -> impl Parser<Vec<T>> {
         self.rep_sep(sep, 1, None)
+    }
+
+    fn plus_lazy<S: Debug>(self, limit: impl Parser<S>) -> impl Parser<Vec<T>> {
+        LazyRepeatingParser {
+            delegate: self,
+            limit,
+            min: 1,
+            max: None,
+            delegate_type: PhantomData,
+            limit_type: PhantomData,
+        }
     }
 
     fn opt(self) -> impl Parser<Option<T>> {

@@ -10,16 +10,51 @@ use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::misc::failure::failure_with_message;
 use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
+use std::rc::Rc;
+
+fn buf(s: &str) -> Rc<[char]> {
+    s.chars().collect::<Vec<_>>().into()
+}
+
+macro_rules! assert_success {
+    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
+        let result = $parser.parse($input);
+        if result.is_err() {
+            panic!("Expected success, but got {:?}", result.unwrap_err());
+        }
+        let result = result.unwrap();
+        assert_that!(result.value, eq($value));
+        assert_that!(result.context.position, eq($pos));
+
+        let pos = $parser.fast_parse_on(buf($input), 0);
+        if pos.is_none() {
+            panic!("Expected position after successful parse, but got None");
+        }
+        let pos = pos.unwrap();
+        assert_that!(pos, eq($pos));
+    }
+}
+
+macro_rules! assert_failure {
+    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
+        let result = $parser.parse($input);
+        if result.is_ok() {
+            panic!("Expected failure, but got success {:?}", result.unwrap());
+        }
+        let failure = result.unwrap_err();
+        assert_that!(failure.message, eq($message));
+        assert_that!(failure.context.position, eq($pos));
+
+        let pos = $parser.fast_parse_on(buf($input), 0);
+        assert_that!(pos, eq(None));
+    }
+}
 
 #[gtest]
 fn map_test() {
     let p = char('a').map(|c| String::from(c));
-    let success = p.parse("abc").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq("a"));
-    let failure = p.parse("bc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected 'a', but found 'b'"));
+    assert_success!(p, "abc", "a", 1);
+    assert_failure!(p, "bc", "expected 'a', but found 'b'", 0);
 }
 
 #[gtest]
@@ -53,21 +88,14 @@ fn token_line_and_column() {
 #[gtest]
 fn trim_test() {
     let p = string("hello").trim();
-    let success = p.parse("  hello  ").unwrap();
-    assert_that!(success.context.position, eq(9));
-    assert_that!(success.value, eq("hello"));
+    assert_success!(p, "  hello  ", "hello", 9);
 }
 
 #[gtest]
 fn input_test() {
     let p = letter().plus().input();
-    let success = p.parse("abc").unwrap();
-    assert_that!(success.context.position, eq(3));
-    assert_that!(success.value, eq("abc"));
-
-    let failure = p.parse("123").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected letter, but found '1'"));
+    assert_success!(p, "abc", "abc", 3);
+    assert_failure!(p, "123", "expected letter, but found '1'", 0);
 }
 
 #[gtest]
@@ -75,13 +103,8 @@ fn input_with_message_test() {
     let p = letter()
         .plus()
         .input_with_message("expected a string of letters".to_string());
-    let success = p.parse("abc").unwrap();
-    assert_that!(success.context.position, eq(3));
-    assert_that!(success.value, eq("abc"));
-
-    let failure = p.parse("123").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected a string of letters"));
+    assert_success!(p, "abc", "abc", 3);
+    assert_failure!(p, "123", "expected a string of letters", 0);
 }
 
 #[gtest]
@@ -91,13 +114,8 @@ fn only_if() {
         .input()
         .map(|s| s.parse::<u32>().unwrap())
         .only_if(|n| *n < 100);
-    let success = p.parse("99").unwrap();
-    assert_that!(success.context.position, eq(2));
-    assert_that!(success.value, eq(99));
-
-    let failure = p.parse("123").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("unexpected \"123\""));
+    assert_success!(p, "99", 99u32, 2);
+    assert_failure!(p, "123", "unexpected \"123\"", 0);
 }
 
 #[gtest]
@@ -107,13 +125,8 @@ fn only_if_with_message() {
         .input()
         .map(|s| s.parse::<u32>().unwrap())
         .only_if_with_message(|n| *n < 100, "expected int less than 100".to_string());
-    let success = p.parse("99").unwrap();
-    assert_that!(success.context.position, eq(2));
-    assert_that!(success.value, eq(99));
-
-    let failure = p.parse("123").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected int less than 100"));
+    assert_success!(p, "99", 99u32, 2);
+    assert_failure!(p, "123", "expected int less than 100", 0);
 }
 
 #[gtest]
@@ -126,21 +139,10 @@ fn only_if_with_factory() {
         .input()
         .map(|s| s.parse::<u32>().unwrap())
         .only_if_with_factory(|n| *n % 7 == 0, factory);
-    let success = p.parse("7").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq(7));
-
-    let success = p.parse("14").unwrap();
-    assert_that!(success.context.position, eq(2));
-    assert_that!(success.value, eq(14));
-
-    let failure = p.parse("").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected digit, but reached end of input"));
-
-    let failure = p.parse("865").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("865 is not divisible by 7"));
+    assert_success!(p, "7", 7u32, 1);
+    assert_success!(p, "14", 14u32, 2);
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "865", "865 is not divisible by 7", 0);
 }
 
 #[gtest]
@@ -148,21 +150,10 @@ fn flat_map() {
     let p = digit().flat_map::<_, Vec<char>>(|n| {
         letter().times(n.to_digit(10).unwrap() as usize)
     });
-    let success = p.parse("3abc").unwrap();
-    assert_that!(success.context.position, eq(4));
-    assert_that!(success.value, eq(&vec!['a', 'b', 'c']));
-
-    let success = p.parse("0").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq(&vec![]));
-
-    let failure = p.parse("3ab*").unwrap_err();
-    assert_that!(failure.context.position, eq(3));
-    assert_that!(failure.message, eq("expected letter, but found '*'"));
-
-    let failure = p.parse("abc").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("expected digit, but found 'a'"));
+    assert_success!(p, "3abc", &vec!['a', 'b', 'c'], 4);
+    assert_success!(p, "0", &vec![], 1);
+    assert_failure!(p, "3ab*", "expected letter, but found '*'", 3);
+    assert_failure!(p, "abc", "expected digit, but found 'a'", 0);
 }
 
 #[gtest]
@@ -173,21 +164,14 @@ fn flat_map_continues_correctly() {
         }),
         char('*'),
     );
-
-    let success = p.parse("3abc*").unwrap();
-    assert_that!(success.context.position, eq(5));
-    assert_that!(success.value, eq(&(vec!['a', 'b', 'c'], '*')));
+    assert_success!(p, "3abc*", &(vec!['a', 'b', 'c'], '*'), 5);
 }
 
 #[gtest]
 fn flat_map_degenerate_cases() {
     let p = success(42).flat_map::<_, char>(|n| char(('0' as u8 + *n as u8) as char));
-    let success = p.parse("Z").unwrap();
-    assert_that!(success.context.position, eq(1));
-    assert_that!(success.value, eq('Z'));
+    assert_success!(p, "Z", 'Z', 1);
 
     let p = failure_with_message("oops".to_string()).flat_map(|_| char('x'));
-    let failure = p.parse("x").unwrap_err();
-    assert_that!(failure.context.position, eq(0));
-    assert_that!(failure.message, eq("oops"));
+    assert_failure!(p, "x", "oops", 0);
 }
