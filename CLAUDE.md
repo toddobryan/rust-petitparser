@@ -25,14 +25,28 @@ src/
     action/
       map.rs      - MapParser<T, P, F> (needs PhantomData<T>)
       token.rs    - TokenParser<P>
+      input.rs    - InputParser (flatten matched chars to String)
+      only_if.rs  - OnlyIfParser (predicate gate on success value)
+      flat_map.rs - FlatMapParser (monadic bind: value → next parser)
     repeater/
-      possessive.rs - PossessiveRepeatingParser { min, max }
+      possessive.rs  - PossessiveRepeatingParser { min, max }
+      separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
     predicate/
       predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
-    ext.rs        - ParserExt<T> extension trait: map, rep, star, plus, opt, token, trim, all_matches, and, not
+    ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
+                    token, trim, input, input_with_message, only_if, only_if_with_message,
+                    only_if_with_factory, all_matches, and, not, labeled, skip,
+                    rep_sep, star_sep, plus_sep
+    combinator/
+      skip.rs     - SkipParser (open, content, close → content)
     misc/
       newline.rs
       end.rs      - EndOfInputParser, eof(), eof_with_message()
+      epsilon.rs  - EpsilonParser, epsilon(), epsilon_with(T)
+      success.rs  - SuccessParser, success(T)
+      failure.rs  - FailureParser, failure(), failure_with_message(String)
+      label.rs    - LabeledParser, .labeled(label) via ParserExt
+      position.rs - PositionParser, position()
   matcher/
     matches.rs    - MatchesIterator<T,P>, MatchesIterable<T,P> (IntoIterator)
 ```
@@ -51,21 +65,31 @@ src/
 
 ## Testing
 - Uses `googletest` crate: `#[gtest]`, `assert_that!`, `eq`, `not`
-- Test file: `tests/parsing_tests.rs`
-- 50 tests passing
+- Tests split across multiple files: `character_tests.rs`, `combinator_tests.rs`, `repeater_tests.rs`,
+  `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`
+- Example grammars: `tests/example-grammars/main.rs` (entry point) + `tests/example-grammars/json.rs`
+- ~135+ tests passing
 
 ## What's Implemented
-- Character parsers: `any`, `char`, `letter`, `digit`, `one_of`, `none_of`, `lowercase`, `uppercase`, `whitespace`, `word`, `predicate`
-- `Seq2`–`Seq9`, `Choice2`–`Choice9`
-- `map`, `rep`, `star`, `plus`, `opt`, `token`, `trim`, `all_matches`
+- Character parsers: `any`, `char`, `char_ci`, `letter`, `digit`, `digit_with_radix`, `one_of`, `one_of_ci`,
+  `none_of`, `none_of_ci`, `lowercase`, `uppercase`, `whitespace`, `word`, `predicate`
+- `Seq2`–`Seq9`, `Choice2`–`Choice9` (with configurable failure joiner: `SELECT_FARTHEST_JOINED`)
+- `map`, `flat_map`, `rep`, `times`, `star`, `plus`, `opt`, `token`, `trim`, `input`, `all_matches`
+- `only_if`, `only_if_with_message`, `only_if_with_factory`
 - `and()`, `not()` lookaheads
+- `rep_sep`, `star_sep`, `plus_sep` (separated repeaters)
+- `skip(open, close)` — wraps parser between delimiters, returns inner value
+- `labeled(label)` — replaces failure message
 - `string(&str)`, `string_ignore_case(&str)` via `PredicateParser`
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
+- `epsilon()`, `epsilon_with(T)`, `success(T)`, `failure()`, `failure_with_message(String)`
+- `position()` — returns current position as `usize` without consuming
 - `SettableParser<T>` for recursive grammars
 - `line_and_column_of`
+- JSON example grammar (full, with recursive `SettableParser`)
 
 ## What's Next
-- `separated_by(sep)` — parse `p (sep p)*`, returns `Vec<T>`
-- `flatten` — collapse `Vec<char>` or nested result to `String`
-- A real recursive grammar (arithmetic with precedence, or JSON) to exercise mutual recursion
-- Decide on / port `GrammarDefinition` + `ref()` sugar — probably defer until hand-written grammars show whether boilerplate hurts
+- Lazy repeaters (stop-at-first vs possessive)
+- `flat_map` / `and_then` — done this session
+- Arithmetic expression example grammar (precedence climbing)
+- `GrammarDefinition` — probably defer

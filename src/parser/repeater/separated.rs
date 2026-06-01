@@ -89,7 +89,7 @@ where
             match result {
                 None => return Some(previous),
                 Some(pos) => {
-                    count = count + 1;
+                    count += 1;
                     current = pos;
                 },
             }

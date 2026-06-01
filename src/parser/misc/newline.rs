@@ -34,10 +34,10 @@ impl Parser<String> for NewlineParser {
             if buffer[position] == '\n' {
                 return Some(position + 1);
             } else if buffer[position] == '\r' {
-                if position + 1 < buffer.len() && buffer[position + 1] == '\n' {
-                    return Some(position + 2);
+                return if position + 1 < buffer.len() && buffer[position + 1] == '\n' {
+                    Some(position + 2)
                 } else {
-                    return Some(position + 1);
+                    Some(position + 1)
                 }
             }
         }

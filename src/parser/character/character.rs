@@ -26,16 +26,16 @@ impl CharKind {
         match self {
             CharKind::Any => true,
             CharKind::Exact(expected) => c == *expected,
-            CharKind::ExactCi(expected) => c.to_ascii_lowercase() == expected.to_ascii_lowercase(),
+            CharKind::ExactCi(expected) => c.eq_ignore_ascii_case(expected),
             CharKind::Letter => c.is_alphabetic(),
             CharKind::Digit(radix) => c.is_digit(*radix),
             CharKind::OneOf(chars) => chars.contains(&c),
-            CharKind::OneOfCi(chars) => 
-                chars.into_iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
+            CharKind::OneOfCi(chars) =>
+                chars.iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
                     .contains(&c.to_ascii_lowercase()),
             CharKind::NoneOf(chars) => !chars.contains(&c),
-            CharKind::NoneOfCi(chars) => 
-                !chars.into_iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
+            CharKind::NoneOfCi(chars) =>
+                !chars.iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
                     .contains(&c.to_ascii_lowercase()),
             CharKind::Lowercase => c.is_lowercase(),
             CharKind::Uppercase => c.is_uppercase(),

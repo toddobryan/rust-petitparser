@@ -1,9 +1,14 @@
+use rust_petitparser::parser::ext::ParserExt;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::core::token::line_and_column_of;
 use rust_petitparser::parser::character::character::char;
+use rust_petitparser::parser::combinator::choice::choice2;
 use rust_petitparser::parser::combinator::sequence::seq2;
 use rust_petitparser::parser::misc::end::eof;
+use rust_petitparser::parser::misc::epsilon::{epsilon, epsilon_with};
+use rust_petitparser::parser::misc::failure::{failure, failure_with_message};
+use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
 use std::rc::Rc;
 
@@ -77,6 +82,136 @@ fn string_emoji() {
     let success = p.parse("🎉🎂 party").unwrap();
     assert_that!(success.context.position, eq(2));
     assert_that!(success.value, eq("🎉🎂"));
+}
+
+// labeled
+
+#[gtest]
+fn labeled_passes_through_on_success() {
+    let p = char('a').labeled("an 'a'");
+    let success = p.parse("abc").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('a'));
+}
+
+#[gtest]
+fn labeled_replaces_message_on_wrong_char() {
+    let p = char('a').labeled("an 'a'");
+    let failure = p.parse("bc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("an 'a'"));
+}
+
+#[gtest]
+fn labeled_replaces_message_at_end_of_input() {
+    let p = char('a').labeled("an 'a'");
+    let failure = p.parse("").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("an 'a'"));
+}
+
+#[gtest]
+fn labeled_works_on_compound_parser() {
+    let p = string("hello").labeled("greeting");
+    let failure = p.parse("world").unwrap_err();
+    assert_that!(failure.message, eq("greeting"));
+}
+
+// epsilon
+
+#[gtest]
+fn epsilon_succeeds_on_nonempty_input() {
+    let success = epsilon().parse("abc").unwrap();
+    assert_that!(success.context.position, eq(0));
+    assert_that!(success.value, eq(()));
+}
+
+#[gtest]
+fn epsilon_succeeds_on_empty_input() {
+    let success = epsilon().parse("").unwrap();
+    assert_that!(success.context.position, eq(0));
+    assert_that!(success.value, eq(()));
+}
+
+#[gtest]
+fn epsilon_does_not_consume_input() {
+    let p = seq2(epsilon(), char('a'));
+    let success = p.parse("abc").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value.1, eq('a'));
+}
+
+#[gtest]
+fn epsilon_with_returns_value() {
+    let success = epsilon_with(42).parse("abc").unwrap();
+    assert_that!(success.context.position, eq(0));
+    assert_that!(success.value, eq(42));
+}
+
+#[gtest]
+fn epsilon_with_does_not_consume_input() {
+    let p = seq2(epsilon_with("ok"), char('x'));
+    let success = p.parse("xyz").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value.0, eq("ok"));
+}
+
+// success
+
+#[gtest]
+fn success_returns_value_without_consuming() {
+    let s = success(99i32).parse("abc").unwrap();
+    assert_that!(s.context.position, eq(0));
+    assert_that!(s.value, eq(99));
+}
+
+#[gtest]
+fn success_works_on_empty_input() {
+    let s = success("done").parse("").unwrap();
+    assert_that!(s.context.position, eq(0));
+    assert_that!(s.value, eq("done"));
+}
+
+#[gtest]
+fn success_as_choice_fallback() {
+    // success(-1) acts as a default when char('a') fails
+    let p = choice2(char('a').map(|_| 1i32), success(-1i32));
+    let s1 = p.parse("abc").unwrap();
+    assert_that!(s1.value, eq(1));
+    let s2 = p.parse("xyz").unwrap();
+    assert_that!(s2.value, eq(-1));
+}
+
+// failure
+
+#[gtest]
+fn failure_always_fails() {
+    let err = failure().parse("abc").unwrap_err();
+    assert_that!(err.context.position, eq(0));
+    assert_that!(err.message, eq("unable to parse"));
+}
+
+#[gtest]
+fn failure_fails_on_empty_input() {
+    let err = failure().parse("").unwrap_err();
+    assert_that!(err.context.position, eq(0));
+    assert_that!(err.message, eq("unable to parse"));
+}
+
+#[gtest]
+fn failure_with_message_uses_given_message() {
+    let err = failure_with_message("no match here".to_string())
+        .parse("abc")
+        .unwrap_err();
+    assert_that!(err.message, eq("no match here"));
+}
+
+#[gtest]
+fn failure_with_message_preserves_position() {
+    let p = seq2(char('a'), failure_with_message("stop".to_string()));
+    let err = p.parse("abc").unwrap_err();
+    assert_that!(err.context.position, eq(1));
+    assert_that!(err.message, eq("stop"));
 }
 
 #[gtest]

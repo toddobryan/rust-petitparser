@@ -7,6 +7,8 @@ use rust_petitparser::core::token::Token;
 use rust_petitparser::parser::character::character::{char, digit, letter};
 use rust_petitparser::parser::combinator::sequence::seq2;
 use rust_petitparser::parser::ext::ParserExt;
+use rust_petitparser::parser::misc::failure::failure_with_message;
+use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
 
 #[gtest]
@@ -139,4 +141,53 @@ fn only_if_with_factory() {
     let failure = p.parse("865").unwrap_err();
     assert_that!(failure.context.position, eq(0));
     assert_that!(failure.message, eq("865 is not divisible by 7"));
+}
+
+#[gtest]
+fn flat_map() {
+    let p = digit().flat_map::<_, Vec<char>>(|n| {
+        letter().times(n.to_digit(10).unwrap() as usize)
+    });
+    let success = p.parse("3abc").unwrap();
+    assert_that!(success.context.position, eq(4));
+    assert_that!(success.value, eq(&vec!['a', 'b', 'c']));
+
+    let success = p.parse("0").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq(&vec![]));
+
+    let failure = p.parse("3ab*").unwrap_err();
+    assert_that!(failure.context.position, eq(3));
+    assert_that!(failure.message, eq("expected letter, but found '*'"));
+
+    let failure = p.parse("abc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("expected digit, but found 'a'"));
+}
+
+#[gtest]
+fn flat_map_continues_correctly() {
+    let p = seq2(
+        digit().flat_map::<_, Vec<char>>(|n| {
+            letter().times(n.to_digit(10).unwrap() as usize)
+        }),
+        char('*'),
+    );
+
+    let success = p.parse("3abc*").unwrap();
+    assert_that!(success.context.position, eq(5));
+    assert_that!(success.value, eq(&(vec!['a', 'b', 'c'], '*')));
+}
+
+#[gtest]
+fn flat_map_degenerate_cases() {
+    let p = success(42).flat_map::<_, char>(|n| char(('0' as u8 + *n as u8) as char));
+    let success = p.parse("Z").unwrap();
+    assert_that!(success.context.position, eq(1));
+    assert_that!(success.value, eq('Z'));
+
+    let p = failure_with_message("oops".to_string()).flat_map(|_| char('x'));
+    let failure = p.parse("x").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("oops"));
 }

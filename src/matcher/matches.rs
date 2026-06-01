@@ -17,7 +17,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.context.position < self.context.buffer.len() {
-            match self.parser.parse_on(&mut self.context) {
+            match self.parser.parse_on(&self.context) {
                 Ok(s) => {
                     if self.overlapping || self.context.position == s.context.position {
                         self.context.position += 1;

@@ -74,11 +74,23 @@ fn star_with_opt_test() {
 fn star_with_opt_that_doesnt_consume_should_panic() {
     let p = char('x').star().opt();
     let orig = panic::take_hook();
+
     panic::set_hook(Box::new(|_| {}));
+
     let result =
-        panic::catch_unwind(|| p.parse("y"));
+        panic::catch_unwind(|| p.parse("y")).expect_err("the function did not panic");
+
     panic::set_hook(orig);
 
+    let msg = if let Some(s) = result.downcast_ref::<&str>() {
+        *s
+    } else if let Some(s) = result.downcast_ref::<String>() {
+        s.as_str()
+    } else {
+        ""
+    };
+
+    assert_that!(msg, eq("PossessiveRepeatingParser { delegate: CharParser { kind: Exact('x'), message: None }, min: 0, max: None } must consume input"));
 }
 
 #[gtest]

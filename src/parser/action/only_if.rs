@@ -4,12 +4,14 @@ use crate::core::result::{Failure, ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+type FactoryFn<T> = fn(&Context, Success<T>) -> ParseResult<T>;
+
 #[derive(Clone, Debug)]
 pub struct OnlyIfParser<P, T> {
     pub delegate: P,
     pub predicate: fn(&T) -> bool,
     pub message: Option<String>,
-    pub factory: Option<fn(&Context, Success<T>) -> ParseResult<T>>,
+    pub factory: Option<FactoryFn<T>>,
     pub delegate_type: PhantomData<T>,
 }
 

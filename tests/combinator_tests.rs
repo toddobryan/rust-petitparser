@@ -5,6 +5,7 @@ use rust_petitparser::parser::combinator::choice::{Choice2, SELECT_FARTHEST_JOIN
 use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
 use rust_petitparser::parser::combinator::settable::SettableParser;
 use rust_petitparser::parser::ext::ParserExt;
+use rust_petitparser::parser::predicate::predicate::string;
 
 #[gtest]
 fn seq2_test() {
@@ -166,4 +167,24 @@ fn not_succeeds_without_advancing() {
     let failure = p.parse("zyx").unwrap_err();
     assert_that!(failure.context.position, eq(0));
     assert_that!(failure.message, eq("Expected failure, got success: 'z'"));
+}
+
+#[gtest]
+fn skip() {
+    let p = string("abc").skip(char('['), char(']'));
+    let success = p.parse("[abc]").unwrap();
+    assert_that!(success.context.position, eq(5));
+    assert_that!(success.value, eq("abc"));
+
+    let failure = p.parse("abc").unwrap_err();
+    assert_that!(failure.context.position, eq(0));
+    assert_that!(failure.message, eq("expected '[', but found 'a'"));
+
+    let failure = p.parse("[xyz]").unwrap_err();
+    assert_that!(failure.context.position, eq(1));
+    assert_that!(failure.message, eq("Expected string: \"abc\""));
+
+    let failure = p.parse("[abcd").unwrap_err();
+    assert_that!(failure.context.position, eq(4));
+    assert_that!(failure.message, eq("expected ']', but found 'd'"));
 }

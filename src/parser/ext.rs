@@ -11,8 +11,11 @@ use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use crate::parser::action::flat_map::FlatMapParser;
 use crate::parser::action::input::InputParser;
 use crate::parser::action::only_if::OnlyIfParser;
+use crate::parser::combinator::skip::SkipParser;
+use crate::parser::misc::label::LabeledParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
 
 pub trait ParserExt<T>: Parser<T> + Sized
@@ -152,6 +155,38 @@ where
             factory: Some(factory),
             message: None,
             delegate_type: PhantomData,
+        }
+    }
+    
+    fn labeled(self, label: impl Into<String>) -> LabeledParser<Self, T> {
+        LabeledParser {
+            delegate: self,
+            label: label.into(),
+            delegate_type: PhantomData,
+        }
+    }
+    
+    fn skip<A, Aft, B, Bef>(self, before: B, after: A) -> SkipParser<A, Aft, B, Bef, Self, T>
+    where
+        A: Parser<Aft>,
+        B: Parser<Bef>,
+    {
+        SkipParser {
+            delegate: self,
+            before,
+            after,
+            delegate_type: PhantomData,
+            before_type: PhantomData,
+            after_type: PhantomData,
+        }
+    }
+    
+    fn flat_map<P2, T2>(self, f: fn(&T) -> P2) -> FlatMapParser<Self, P2, T, T2> {
+        FlatMapParser {
+            delegate: self,
+            f,
+            delegate_type: PhantomData,
+            result_type: PhantomData,
         }
     }
 }
