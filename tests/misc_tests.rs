@@ -10,8 +10,8 @@ use rust_petitparser::parser::misc::epsilon::{epsilon, epsilon_with};
 use rust_petitparser::parser::misc::failure::{failure, failure_with_message};
 use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
-use std::rc::Rc;
 use rust_petitparser::{assert_failure, assert_success};
+use std::rc::Rc;
 
 fn buf(s: &str) -> Rc<[char]> {
     s.chars().collect::<Vec<_>>().into()

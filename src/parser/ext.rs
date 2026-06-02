@@ -11,6 +11,8 @@ use crate::parser::character::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
 use crate::parser::combinator::sequence::seq3;
 use crate::parser::combinator::skip::SkipParser;
+use crate::parser::misc::end::eof;
+use crate::parser::misc::epsilon::epsilon;
 use crate::parser::misc::label::LabeledParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
@@ -227,6 +229,24 @@ where
             before_type: PhantomData,
             after_type: PhantomData,
         }
+    }
+
+    fn skip_left<B, Bef>(self, before: B) -> SkipParser<impl Parser<()>, (), B, Bef, Self, T>
+    where
+        B: Parser<Bef>,
+    {
+        self.skip(before, epsilon())
+    }
+
+    fn skip_right<A, Aft>(self, after: A) -> SkipParser<A, Aft, impl Parser<()>, (), Self, T>
+    where
+        A: Parser<Aft>,
+    {
+        self.skip(epsilon(), after)
+    }
+
+    fn end(self) -> impl Parser<T> {
+        self.skip_right(eof())
     }
 
     fn flat_map<P2, T2>(self, f: fn(&T) -> P2) -> FlatMapParser<Self, P2, T, T2> {

@@ -9,8 +9,8 @@ use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::misc::failure::failure_with_message;
 use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
-use std::fmt::Debug;
 use rust_petitparser::{assert_failure, assert_success};
+use std::fmt::Debug;
 
 #[gtest]
 fn map_test() {

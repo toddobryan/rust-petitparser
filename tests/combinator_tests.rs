@@ -8,7 +8,6 @@ use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
 use rust_petitparser::parser::combinator::settable::SettableParser;
 use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::predicate::predicate::string;
-use std::rc::Rc;
 use rust_petitparser::{assert_failure, assert_success};
 
 #[gtest]

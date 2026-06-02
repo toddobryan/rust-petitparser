@@ -2,8 +2,8 @@ use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::parser::character::character::{char, digit, letter, word};
 use rust_petitparser::parser::ext::ParserExt;
-use std::panic;
 use rust_petitparser::{assert_failure, assert_success};
+use std::panic;
 
 #[gtest]
 fn opt_test() {
@@ -146,7 +146,12 @@ fn star_lazy() {
 #[gtest]
 fn plus_lazy() {
     let p = word().plus_lazy(digit());
-    assert_failure!(p, "", "expected word character (letter, digit, or '_'), but reached end of input", 0);
+    assert_failure!(
+        p,
+        "",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        0
+    );
     assert_failure!(p, "a", "expected digit, but reached end of input", 1);
     assert_failure!(p, "ab", "expected digit, but reached end of input", 2);
     assert_failure!(p, "1", "expected digit, but reached end of input", 1);
@@ -162,13 +167,28 @@ fn plus_lazy() {
 #[gtest]
 fn repeat_lazy() {
     let p = word().rep_lazy(digit(), 2, Some(4));
-    assert_failure!(p, "", "expected word character (letter, digit, or '_'), but reached end of input", 0);
-    assert_failure!(p, "a","expected word character (letter, digit, or '_'), but reached end of input", 1);
+    assert_failure!(
+        p,
+        "",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        0
+    );
+    assert_failure!(
+        p,
+        "a",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        1
+    );
     assert_failure!(p, "ab", "expected digit, but reached end of input", 2);
     assert_failure!(p, "abc", "expected digit, but reached end of input", 3);
     assert_failure!(p, "abcd", "expected digit, but reached end of input", 4);
     assert_failure!(p, "abcde", "expected digit, but found 'e'", 4);
-    assert_failure!(p, "1", "expected word character (letter, digit, or '_'), but reached end of input", 1);
+    assert_failure!(
+        p,
+        "1",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        1
+    );
     assert_failure!(p, "a1", "expected digit, but reached end of input", 2);
 }
 /*

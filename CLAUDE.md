@@ -37,6 +37,7 @@ src/
     ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
                     token, trim, input, input_with_message, only_if, only_if_with_message,
                     only_if_with_factory, all_matches, and, not, labeled, skip,
+                    skip_left, skip_right, end,
                     rep_sep, star_sep, plus_sep,
                     rep_lazy, star_lazy, plus_lazy
     combinator/
@@ -71,8 +72,8 @@ src/
   `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`
 - Each test file defines `assert_success!(parser, input, value, pos)` and `assert_failure!(parser, input, message, pos)`
   macros that check both `parse_on` and `fast_parse_on`
-- Example grammars: `tests/example-grammars/main.rs` (entry point) + `tests/example-grammars/json.rs`
-- 152 tests passing
+- Example grammars: `tests/example-grammars/main.rs` (entry point) + `tests/example-grammars/json.rs` + `tests/example-grammars/expr.rs`
+- 159 tests passing
 
 ## What's Implemented
 - Character parsers: `any`, `char`, `char_ci`, `letter`, `digit`, `digit_with_radix`, `one_of`, `one_of_ci`,
@@ -84,6 +85,7 @@ src/
 - `rep_sep`, `star_sep`, `plus_sep` (separated repeaters)
 - `rep_lazy`, `star_lazy`, `plus_lazy` (lazy repeaters with limit parser)
 - `skip(open, close)` — wraps parser between delimiters, returns inner value
+- `skip_left(before)`, `skip_right(after)`, `end()` — variants of skip
 - `labeled(label)` — replaces failure message
 - `string(&str)`, `string_ignore_case(&str)` via `PredicateParser`
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
@@ -92,12 +94,13 @@ src/
 - `SettableParser<T>` for recursive grammars
 - `line_and_column_of`
 - JSON example grammar (full, with recursive `SettableParser`)
+- Arithmetic expression grammar (`tests/example-grammars/expr.rs`)
+  - Integer arithmetic: `+`, `-`, `*`, `/` with correct precedence and left-associativity
+  - Parenthesized subexpressions via recursive `SettableParser`
+  - `fold_ops` pattern: `fn(&(f64, Vec<(char, f64)>)) -> f64` with left fold
+  - Note: `SkipParser` does NOT need `T: Clone` — removed that bound
 
 ## What's Next
-- Arithmetic expression grammar in `tests/example-grammars/expr.rs`
-  - Structure: number → primary → mul_expr → add_expr → set SettableParser<f64>
-  - Fold ops with named top-level fn pointers (fn(&(f64, Vec<(char,f64)>)) -> f64)
-  - Start with integers, add floats once structure works
-  - Register in tests/example-grammars/main.rs like json.rs
 - Port remaining dart-petitparser tests (repeat_lazy success cases, etc.)
+- Add float support to expr grammar (fraction + exponent)
 - `GrammarDefinition` — probably defer

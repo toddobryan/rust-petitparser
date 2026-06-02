@@ -20,9 +20,9 @@ where
     P: Parser<T>,
     B: Parser<Bef>,
     A: Parser<Aft>,
-    T: Clone + Debug,
-    Bef: Clone + Debug,
-    Aft: Clone + Debug,
+    T: Debug,
+    Bef: Debug,
+    Aft: Debug,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         let before = self.before.parse_on(context)?;
