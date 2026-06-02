@@ -72,7 +72,7 @@ pub fn json_parser() -> impl Parser<Json> {
 
     let array = seq3(
         char('['),
-        json_value.clone().trim().star_sep(char(',').trim()),
+        json_value.borrow().trim().star_sep(char(',').trim()),
         char(']'),
     )
     .map(|(_, v, _)| Json::Array(v));
@@ -80,7 +80,7 @@ pub fn json_parser() -> impl Parser<Json> {
     let member = seq3(
         raw_string_parser().trim(),
         char(':').trim(),
-        json_value.clone().trim(),
+        json_value.borrow().trim(),
     )
     .map(|(s, _, v)| (s, v));
 

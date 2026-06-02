@@ -64,7 +64,10 @@ src/
 - `PredicateParser.length` is in **chars** (`.chars().count()`), not bytes — required for Unicode/emoji correctness.
 - `AndParser` returns `Parser<T>` — preserves the matched value but resets position to original (lookahead).
 - `NotParser` returns `Parser<Failure>` — inner failure becomes the success value. Error message: `"Expected failure, got success: {:?}"` on the value.
-- `SettableParser` uses `Rc<RefCell<Option<Rc<dyn Parser<T>>>>>` — allows setting after cloning for recursive grammars. Can leak via Rc cycle.
+- `SettableParser` uses `Rc<RefCell<Option<Rc<dyn Parser<T>>>>>` — the "owner" (strong Rc).
+- `SettableParserRef` uses `Weak<RefCell<...>>` — the "embedded reference" that breaks Rc cycles.
+- Call `.borrow()` on `SettableParser` to get a `SettableParserRef` for embedding in sub-parsers.
+- Rule: use `.clone()` for forward references (more complex → simpler); use `.borrow()` only for back-references (the one that creates the cycle). The strong chain from the returned root parser keeps all intermediate parsers alive.
 
 ## Testing
 - Uses `googletest` crate: `#[gtest]`, `assert_that!`, `eq`, `not`

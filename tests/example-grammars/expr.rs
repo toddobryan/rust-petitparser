@@ -18,7 +18,7 @@ fn expr_parser() -> impl Parser<f64> {
 
     atom.set(choice2(
         number,
-        add_expr.clone().skip(char('(').trim(), char(')').trim()),
+        add_expr.borrow().skip(char('(').trim(), char(')').trim()),
     ));
 
     add_expr.set(
