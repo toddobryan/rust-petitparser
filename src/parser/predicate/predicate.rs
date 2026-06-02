@@ -1,4 +1,4 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult};
 use std::fmt::Debug;
@@ -65,7 +65,7 @@ impl Parser<String> for PredicateParser {
         if end <= context.buffer.len() {
             let substring: String = context.buffer[start..end].iter().collect();
             if (self.predicate)(&substring) {
-                context.success(substring, context.position + self.length)
+                context.success_with_position(substring, context.position + self.length)
             } else {
                 Err(Failure {
                     context: context.clone(),

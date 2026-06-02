@@ -1,53 +1,20 @@
-use rust_petitparser::parser::ext::ParserExt;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::core::token::line_and_column_of;
 use rust_petitparser::parser::character::character::char;
 use rust_petitparser::parser::combinator::choice::choice2;
 use rust_petitparser::parser::combinator::sequence::seq2;
+use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::misc::end::eof;
 use rust_petitparser::parser::misc::epsilon::{epsilon, epsilon_with};
 use rust_petitparser::parser::misc::failure::{failure, failure_with_message};
 use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
 use std::rc::Rc;
+use rust_petitparser::{assert_failure, assert_success};
 
 fn buf(s: &str) -> Rc<[char]> {
     s.chars().collect::<Vec<_>>().into()
-}
-
-macro_rules! assert_success {
-    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_err() {
-            panic!("Expected success, but got {:?}", result.unwrap_err());
-        }
-        let result = result.unwrap();
-        assert_that!(result.value, eq($value));
-        assert_that!(result.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        if pos.is_none() {
-            panic!("Expected position after successful parse, but got None");
-        }
-        let pos = pos.unwrap();
-        assert_that!(pos, eq($pos));
-    }
-}
-
-macro_rules! assert_failure {
-    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_ok() {
-            panic!("Expected failure, but got success {:?}", result.unwrap());
-        }
-        let failure = result.unwrap_err();
-        assert_that!(failure.message, eq($message));
-        assert_that!(failure.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        assert_that!(pos, eq(None));
-    }
 }
 
 #[gtest]
@@ -196,7 +163,12 @@ fn failure_fails_on_empty_input() {
 
 #[gtest]
 fn failure_with_message_uses_given_message() {
-    assert_failure!(failure_with_message("no match here".to_string()), "abc", "no match here", 0);
+    assert_failure!(
+        failure_with_message("no match here".to_string()),
+        "abc",
+        "no match here",
+        0
+    );
 }
 
 #[gtest]

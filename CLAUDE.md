@@ -31,12 +31,14 @@ src/
     repeater/
       possessive.rs  - PossessiveRepeatingParser { min, max }
       separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
+      lazy.rs        - LazyRepeatingParser<P, T, PC, TC> { delegate, limit, min, max }
     predicate/
       predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
     ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
                     token, trim, input, input_with_message, only_if, only_if_with_message,
                     only_if_with_factory, all_matches, and, not, labeled, skip,
-                    rep_sep, star_sep, plus_sep
+                    rep_sep, star_sep, plus_sep,
+                    rep_lazy, star_lazy, plus_lazy
     combinator/
       skip.rs     - SkipParser (open, content, close → content)
     misc/
@@ -67,8 +69,10 @@ src/
 - Uses `googletest` crate: `#[gtest]`, `assert_that!`, `eq`, `not`
 - Tests split across multiple files: `character_tests.rs`, `combinator_tests.rs`, `repeater_tests.rs`,
   `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`
+- Each test file defines `assert_success!(parser, input, value, pos)` and `assert_failure!(parser, input, message, pos)`
+  macros that check both `parse_on` and `fast_parse_on`
 - Example grammars: `tests/example-grammars/main.rs` (entry point) + `tests/example-grammars/json.rs`
-- ~135+ tests passing
+- 152 tests passing
 
 ## What's Implemented
 - Character parsers: `any`, `char`, `char_ci`, `letter`, `digit`, `digit_with_radix`, `one_of`, `one_of_ci`,
@@ -78,6 +82,7 @@ src/
 - `only_if`, `only_if_with_message`, `only_if_with_factory`
 - `and()`, `not()` lookaheads
 - `rep_sep`, `star_sep`, `plus_sep` (separated repeaters)
+- `rep_lazy`, `star_lazy`, `plus_lazy` (lazy repeaters with limit parser)
 - `skip(open, close)` — wraps parser between delimiters, returns inner value
 - `labeled(label)` — replaces failure message
 - `string(&str)`, `string_ignore_case(&str)` via `PredicateParser`
@@ -89,7 +94,10 @@ src/
 - JSON example grammar (full, with recursive `SettableParser`)
 
 ## What's Next
-- Lazy repeaters (stop-at-first vs possessive)
-- `flat_map` / `and_then` — done this session
-- Arithmetic expression example grammar (precedence climbing)
+- Arithmetic expression grammar in `tests/example-grammars/expr.rs`
+  - Structure: number → primary → mul_expr → add_expr → set SettableParser<f64>
+  - Fold ops with named top-level fn pointers (fn(&(f64, Vec<(char,f64)>)) -> f64)
+  - Start with integers, add floats once structure works
+  - Register in tests/example-grammars/main.rs like json.rs
+- Port remaining dart-petitparser tests (repeat_lazy success cases, etc.)
 - `GrammarDefinition` — probably defer

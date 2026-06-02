@@ -1,9 +1,9 @@
+use crate::core::context::{Context, HasContext};
+use crate::core::parser::Parser;
+use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use crate::core::context::Context;
-use crate::core::parser::Parser;
-use crate::core::result::ParseResult;
 
 #[derive(Clone, Debug)]
 pub struct SkipParser<A, Aft, B, Bef, P, T> {
@@ -15,7 +15,7 @@ pub struct SkipParser<A, Aft, B, Bef, P, T> {
     pub after_type: PhantomData<Aft>,
 }
 
-impl <A, Aft, B, Bef, P, T> Parser<T> for SkipParser<A, Aft, B, Bef, P, T>
+impl<A, Aft, B, Bef, P, T> Parser<T> for SkipParser<A, Aft, B, Bef, P, T>
 where
     P: Parser<T>,
     B: Parser<Bef>,
@@ -29,7 +29,9 @@ where
         let result = self.delegate.parse_on(&before.context)?;
 
         let after = self.after.parse_on(&result.context)?;
-        after.context.success(result.value, after.context.position)
+        after
+            .context
+            .success_with_position(result.value, after.context.position)
     }
 
     fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {

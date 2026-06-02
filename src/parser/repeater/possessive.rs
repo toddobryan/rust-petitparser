@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
+use std::fmt::Debug;
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ where
                 Err(_) => break,
             }
         }
-        ctx.success(elements, ctx.position)
+        ctx.success(elements)
     }
 
     fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {

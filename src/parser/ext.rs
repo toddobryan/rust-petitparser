@@ -2,22 +2,22 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::matcher::matches::MatchesIterable;
+use crate::parser::action::flat_map::FlatMapParser;
+use crate::parser::action::input::InputParser;
 use crate::parser::action::map::MapParser;
+use crate::parser::action::only_if::OnlyIfParser;
 use crate::parser::action::token::TokenParser;
 use crate::parser::character::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
 use crate::parser::combinator::sequence::seq3;
-use crate::parser::repeater::possessive::PossessiveRepeatingParser;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::rc::Rc;
-use crate::parser::action::flat_map::FlatMapParser;
-use crate::parser::action::input::InputParser;
-use crate::parser::action::only_if::OnlyIfParser;
 use crate::parser::combinator::skip::SkipParser;
 use crate::parser::misc::label::LabeledParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
+use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::rc::Rc;
 
 pub trait ParserExt<T>: Parser<T> + Sized
 where
@@ -56,7 +56,12 @@ where
         }
     }
 
-    fn rep_lazy<S: Debug>(self, limit: impl Parser<S>, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+    fn rep_lazy<S: Debug>(
+        self,
+        limit: impl Parser<S>,
+        min: usize,
+        max: Option<usize>,
+    ) -> impl Parser<Vec<T>> {
         LazyRepeatingParser {
             delegate: self,
             limit,
@@ -67,11 +72,16 @@ where
         }
     }
 
-    fn times(self, num: usize) -> PossessiveRepeatingParser<Self>  {
+    fn times(self, num: usize) -> PossessiveRepeatingParser<Self> {
         self.rep(num, Some(num))
     }
 
-    fn rep_sep<S: Debug>(self, sep: impl Parser<S>, min: usize, max: Option<usize>) -> impl Parser<Vec<T>> {
+    fn rep_sep<S: Debug>(
+        self,
+        sep: impl Parser<S>,
+        min: usize,
+        max: Option<usize>,
+    ) -> impl Parser<Vec<T>> {
         SeparatedRepeatingParser {
             delegate: self,
             separator: sep,
@@ -182,7 +192,11 @@ where
         }
     }
 
-    fn only_if_with_factory(self, pred: fn(&T) -> bool, factory: fn(&Context, Success<T>) -> ParseResult<T>) -> OnlyIfParser<Self, T> {
+    fn only_if_with_factory(
+        self,
+        pred: fn(&T) -> bool,
+        factory: fn(&Context, Success<T>) -> ParseResult<T>,
+    ) -> OnlyIfParser<Self, T> {
         OnlyIfParser {
             delegate: self,
             predicate: pred,
@@ -191,7 +205,7 @@ where
             delegate_type: PhantomData,
         }
     }
-    
+
     fn labeled(self, label: impl Into<String>) -> LabeledParser<Self, T> {
         LabeledParser {
             delegate: self,
@@ -199,7 +213,7 @@ where
             delegate_type: PhantomData,
         }
     }
-    
+
     fn skip<A, Aft, B, Bef>(self, before: B, after: A) -> SkipParser<A, Aft, B, Bef, Self, T>
     where
         A: Parser<Aft>,
@@ -214,7 +228,7 @@ where
             after_type: PhantomData,
         }
     }
-    
+
     fn flat_map<P2, T2>(self, f: fn(&T) -> P2) -> FlatMapParser<Self, P2, T, T2> {
         FlatMapParser {
             delegate: self,

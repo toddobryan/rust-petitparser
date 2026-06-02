@@ -30,13 +30,17 @@ impl CharKind {
             CharKind::Letter => c.is_alphabetic(),
             CharKind::Digit(radix) => c.is_digit(*radix),
             CharKind::OneOf(chars) => chars.contains(&c),
-            CharKind::OneOfCi(chars) =>
-                chars.iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
-                    .contains(&c.to_ascii_lowercase()),
+            CharKind::OneOfCi(chars) => chars
+                .iter()
+                .map(|c| c.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+                .contains(&c.to_ascii_lowercase()),
             CharKind::NoneOf(chars) => !chars.contains(&c),
-            CharKind::NoneOfCi(chars) =>
-                !chars.iter().map(|c| c.to_ascii_lowercase()).collect::<Vec<_>>()
-                    .contains(&c.to_ascii_lowercase()),
+            CharKind::NoneOfCi(chars) => !chars
+                .iter()
+                .map(|c| c.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+                .contains(&c.to_ascii_lowercase()),
             CharKind::Lowercase => c.is_lowercase(),
             CharKind::Uppercase => c.is_uppercase(),
             CharKind::Whitespace => c.is_whitespace(),
@@ -96,16 +100,16 @@ impl CharParser {
 }
 
 impl Parser<char> for CharParser {
-    fn parse_on(&self, context: &impl HasContext) -> ParseResult<char> {
-        let pos = context.position;
-        if pos >= context.buffer.len() {
+    fn parse_on(&self, context: &Context) -> ParseResult<char> {
+        let pos = context.position();
+        if pos >= context.buffer().len() {
             return context.failure(self.message_for(None));
         }
-        let c = context.buffer[pos];
+        let c = context.buffer()[pos];
         if self.kind.matches(c) {
-            context.success(c, pos + 1)
+            context.success_with_position(c, pos + 1)
         } else {
-            context.failure(self.message_for(Some(c)), pos)
+            context.failure_with_position(self.message_for(Some(c)), pos)
         }
     }
 }
@@ -141,22 +145,22 @@ impl Debug for PredicateCharParser {
 
 impl Parser<char> for PredicateCharParser {
     fn parse_on(&self, context: &Context) -> ParseResult<char> {
-        let pos = context.position;
-        if pos >= context.buffer.len() {
-            return context.failure(self.message_for(None), pos);
+        if context.position() >= context.buffer().len() {
+            return context.failure(self.message_for(None));
         }
-        let c = context.buffer[pos];
+        let c = context.buffer()[context.position()];
         if (self.test)(c) {
-            context.success(c, pos + 1)
+            context.success_with_position(c, context.position() + 1)
         } else {
-            context.failure(self.message_for(Some(c)), pos)
+            context.failure(self.message_for(Some(c)))
         }
     }
 }
 
 pub fn any() -> CharParser {
     CharParser {
-        kind: CharKind::Any,        message: None,
+        kind: CharKind::Any,
+        message: None,
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::rc::Rc;
@@ -20,10 +20,10 @@ pub struct EndOfInputParser {
 
 impl Parser<()> for EndOfInputParser {
     fn parse_on(&self, context: &Context) -> ParseResult<()> {
-        if context.position < context.buffer.len() {
-            context.failure(self.message.clone(), context.position)
+        if context.position() < context.buffer().len() {
+            context.failure(self.message.clone())
         } else {
-            context.success((), context.position)
+            context.success(())
         }
     }
 

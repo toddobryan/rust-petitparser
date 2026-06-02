@@ -1,47 +1,9 @@
-use std::panic;
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::parser::character::character::{char, digit, letter, word};
 use rust_petitparser::parser::ext::ParserExt;
-use std::rc::Rc;
-
-fn buf(s: &str) -> Rc<[char]> {
-    s.chars().collect::<Vec<_>>().into()
-}
-
-macro_rules! assert_success {
-    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_err() {
-            panic!("Expected success, but got {:?}", result.unwrap_err());
-        }
-        let result = result.unwrap();
-        assert_that!(result.value, eq($value));
-        assert_that!(result.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        if (pos.is_none()) {
-            panic!("Expected position after successful parse, but got None");
-        }
-        let pos = pos.unwrap();
-        assert_that!(pos, eq($pos));
-    }
-}
-
-macro_rules! assert_failure {
-    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_ok() {
-            panic!("Expected failure, but got success {:?}", result.unwrap());
-        }
-        let failure = result.unwrap_err();
-        assert_that!(failure.message, eq($message));
-        assert_that!(failure.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        assert_that!(pos, eq(None));
-    }
-}
+use std::panic;
+use rust_petitparser::{assert_failure, assert_success};
 
 #[gtest]
 fn opt_test() {
@@ -85,8 +47,7 @@ fn star_with_opt_that_doesnt_consume_should_panic() {
 
     panic::set_hook(Box::new(|_| {}));
 
-    let result =
-        panic::catch_unwind(|| p.parse("y")).expect_err("the function did not panic");
+    let result = panic::catch_unwind(|| p.parse("y")).expect_err("the function did not panic");
 
     panic::set_hook(orig);
 
@@ -98,7 +59,12 @@ fn star_with_opt_that_doesnt_consume_should_panic() {
         ""
     };
 
-    assert_that!(msg, eq("PossessiveRepeatingParser { delegate: CharParser { kind: Exact('x'), message: None }, min: 0, max: None } must consume input"));
+    assert_that!(
+        msg,
+        eq(
+            "PossessiveRepeatingParser { delegate: CharParser { kind: Exact('x'), message: None }, min: 0, max: None } must consume input"
+        )
+    );
 }
 
 #[gtest]
@@ -167,89 +133,46 @@ fn star_lazy() {
     assert_success!(p, "a1", &vec!['a'], 1);
     assert_success!(p, "ab1", &vec!['a', 'b'], 2);
     assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "12", &vec![], 0);
+    assert_success!(p, "a12", &vec!['a'], 1);
+    assert_success!(p, "ab12", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc12", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "123", &vec![], 0);
+    assert_success!(p, "a123", &vec!['a'], 1);
+    assert_success!(p, "ab123", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c'], 3);
 }
-/*expect(parser, isParseSuccess('12', result: isEmpty, position: 0));
-expect(parser, isParseSuccess('a12', result: ['a'], position: 1));
-expect(parser, isParseSuccess('ab12', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc12', result: ['a', 'b', 'c'], position: 3),
-);
-expect(parser, isParseSuccess('123', result: isEmpty, position: 0));
-expect(parser, isParseSuccess('a123', result: ['a'], position: 1));
-expect(parser, isParseSuccess('ab123', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc123', result: ['a', 'b', 'c'], position: 3),
-);
-});
-test('plus', () {
-final parser = word().plusLazy(digit());
-expect(parser, isParseFailure(''));
-expect(
-parser,
-isParseFailure('a', position: 1, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('ab', position: 2, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('1', position: 1, message: 'digit expected'),
-);
-expect(parser, isParseSuccess('a1', result: ['a'], position: 1));
-expect(parser, isParseSuccess('ab1', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc1', result: ['a', 'b', 'c'], position: 3),
-);
-expect(parser, isParseSuccess('12', result: ['1'], position: 1));
-expect(parser, isParseSuccess('a12', result: ['a'], position: 1));
-expect(parser, isParseSuccess('ab12', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc12', result: ['a', 'b', 'c'], position: 3),
-);
-expect(parser, isParseSuccess('123', result: ['1'], position: 1));
-expect(parser, isParseSuccess('a123', result: ['a'], position: 1));
-expect(parser, isParseSuccess('ab123', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc123', result: ['a', 'b', 'c'], position: 3),
-);
-});
-test('repeat', () {
-final parser = word().repeatLazy(digit(), 2, 4);
-expect(parser, isParseFailure('', message: 'letter or digit expected'));
-expect(
-parser,
-isParseFailure('a', position: 1, message: 'letter or digit expected'),
-);
-expect(
-parser,
-isParseFailure('ab', position: 2, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('abc', position: 3, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('abcd', position: 4, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('abcde', position: 4, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('1', position: 1, message: 'letter or digit expected'),
-);
-expect(
-parser,
-isParseFailure('a1', position: 2, message: 'digit expected'),
-);
+
+#[gtest]
+fn plus_lazy() {
+    let p = word().plus_lazy(digit());
+    assert_failure!(p, "", "expected word character (letter, digit, or '_'), but reached end of input", 0);
+    assert_failure!(p, "a", "expected digit, but reached end of input", 1);
+    assert_failure!(p, "ab", "expected digit, but reached end of input", 2);
+    assert_failure!(p, "1", "expected digit, but reached end of input", 1);
+    assert_success!(p, "a1", &vec!['a'], 1);
+    assert_success!(p, "ab1", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "12", &vec!['1'], 1);
+    assert_success!(p, "a12", &vec!['a'], 1);
+    assert_success!(p, "ab12", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c'], 3);
+}
+
+#[gtest]
+fn repeat_lazy() {
+    let p = word().rep_lazy(digit(), 2, Some(4));
+    assert_failure!(p, "", "expected word character (letter, digit, or '_'), but reached end of input", 0);
+    assert_failure!(p, "a","expected word character (letter, digit, or '_'), but reached end of input", 1);
+    assert_failure!(p, "ab", "expected digit, but reached end of input", 2);
+    assert_failure!(p, "abc", "expected digit, but reached end of input", 3);
+    assert_failure!(p, "abcd", "expected digit, but reached end of input", 4);
+    assert_failure!(p, "abcde", "expected digit, but found 'e'", 4);
+    assert_failure!(p, "1", "expected word character (letter, digit, or '_'), but reached end of input", 1);
+    assert_failure!(p, "a1", "expected digit, but reached end of input", 2);
+}
+/*
+
 expect(parser, isParseSuccess('ab1', result: ['a', 'b'], position: 2));
 expect(
 parser,

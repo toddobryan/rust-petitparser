@@ -1,3 +1,4 @@
+use crate::core::context::HasContext;
 use crate::core::result::Failure;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
@@ -26,7 +27,7 @@ impl Display for ParserError {
             f,
             "{} at {}",
             self.failure.message,
-            self.failure.context.to_position_string()
+            self.failure.to_position_string()
         )
     }
 }

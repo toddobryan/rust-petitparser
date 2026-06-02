@@ -5,44 +5,7 @@ use rust_petitparser::parser::character::character::{
     one_of_ci, predicate, uppercase, whitespace, word,
 };
 use std::rc::Rc;
-
-fn buf(s: &str) -> Rc<[char]> {
-    s.chars().collect::<Vec<_>>().into()
-}
-
-macro_rules! assert_success {
-    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_err() {
-            panic!("Expected success, but got {:?}", result.unwrap_err());
-        }
-        let result = result.unwrap();
-        assert_that!(result.value, eq($value));
-        assert_that!(result.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        if pos.is_none() {
-            panic!("Expected position after successful parse, but got None");
-        }
-        let pos = pos.unwrap();
-        assert_that!(pos, eq($pos));
-    }
-}
-
-macro_rules! assert_failure {
-    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_ok() {
-            panic!("Expected failure, but got success {:?}", result.unwrap());
-        }
-        let failure = result.unwrap_err();
-        assert_that!(failure.message, eq($message));
-        assert_that!(failure.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        assert_that!(pos, eq(None));
-    }
-}
+use rust_petitparser::{assert_failure, assert_success};
 
 // char
 
@@ -80,7 +43,12 @@ fn any_matches_any_char() {
 
 #[gtest]
 fn any_fails_at_end_of_input() {
-    assert_failure!(any(), "", "expected any character, but reached end of input", 0);
+    assert_failure!(
+        any(),
+        "",
+        "expected any character, but reached end of input",
+        0
+    );
 }
 
 // letter
@@ -119,7 +87,12 @@ fn digit_hex_matches_hex_char() {
 
 #[gtest]
 fn digit_hex_fails_on_non_hex() {
-    assert_failure!(digit_with_radix(16), "gz", "expected digit (radix 16), but found 'g'", 0);
+    assert_failure!(
+        digit_with_radix(16),
+        "gz",
+        "expected digit (radix 16), but found 'g'",
+        0
+    );
 }
 
 // one_of / none_of
@@ -159,7 +132,12 @@ fn lowercase_matches() {
 
 #[gtest]
 fn lowercase_fails_on_uppercase() {
-    assert_failure!(lowercase(), "Abc", "expected lowercase letter, but found 'A'", 0);
+    assert_failure!(
+        lowercase(),
+        "Abc",
+        "expected lowercase letter, but found 'A'",
+        0
+    );
 }
 
 #[gtest]
@@ -169,7 +147,12 @@ fn uppercase_matches() {
 
 #[gtest]
 fn uppercase_fails_on_lowercase() {
-    assert_failure!(uppercase(), "abc", "expected uppercase letter, but found 'a'", 0);
+    assert_failure!(
+        uppercase(),
+        "abc",
+        "expected uppercase letter, but found 'a'",
+        0
+    );
 }
 
 // whitespace
@@ -208,7 +191,12 @@ fn word_matches_underscore() {
 
 #[gtest]
 fn word_fails_on_space() {
-    assert_failure!(word(), " abc", "expected word character (letter, digit, or '_'), but found ' '", 0);
+    assert_failure!(
+        word(),
+        " abc",
+        "expected word character (letter, digit, or '_'), but found ' '",
+        0
+    );
 }
 
 // predicate
@@ -244,12 +232,22 @@ fn char_ci_uppercase_pattern_matches_lowercase() {
 
 #[gtest]
 fn char_ci_fails_on_different_char() {
-    assert_failure!(char_ci('a'), "bcd", "expected 'a' (case-insensitive), but found 'b'", 0);
+    assert_failure!(
+        char_ci('a'),
+        "bcd",
+        "expected 'a' (case-insensitive), but found 'b'",
+        0
+    );
 }
 
 #[gtest]
 fn char_ci_fails_at_end_of_input() {
-    assert_failure!(char_ci('a'), "", "expected 'a' (case-insensitive), but reached end of input", 0);
+    assert_failure!(
+        char_ci('a'),
+        "",
+        "expected 'a' (case-insensitive), but reached end of input",
+        0
+    );
 }
 
 // one_of_ci

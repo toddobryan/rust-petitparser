@@ -1,4 +1,4 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::rc::Rc;
@@ -14,18 +14,17 @@ impl Parser<String> for NewlineParser {
         let buffer: &[char] = &context.buffer;
         if position < buffer.len() {
             if buffer[position] == '\n' {
-                return context.success("\n".to_string(), position + 1);
+                return context.success_with_position("\n".to_string(), position + 1);
             } else if buffer[position] == '\r' && buffer[position + 1] == '\n' {
-                return context.success("\r\n".to_string(), position + 2);
+                return context.success_with_position("\r\n".to_string(), position + 2);
             } else if buffer[position] == '\r' {
-                return context.success("\r".to_string(), position + 1);
+                return context.success_with_position("\r".to_string(), position + 1);
             }
         }
         context.failure(
             self.message
                 .clone()
                 .unwrap_or("newline expected".to_string()),
-            position,
         )
     }
 
@@ -38,7 +37,7 @@ impl Parser<String> for NewlineParser {
                     Some(position + 2)
                 } else {
                     Some(position + 1)
-                }
+                };
             }
         }
         None

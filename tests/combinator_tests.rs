@@ -1,50 +1,15 @@
 use googletest::prelude::*;
 use rust_petitparser::core::parser::Parser;
 use rust_petitparser::parser::character::character::{char, letter};
-use rust_petitparser::parser::combinator::choice::{Choice2, SELECT_FARTHEST_JOINED, choice2, choice3};
+use rust_petitparser::parser::combinator::choice::{
+    Choice2, SELECT_FARTHEST_JOINED, choice2, choice3,
+};
 use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
 use rust_petitparser::parser::combinator::settable::SettableParser;
 use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::predicate::predicate::string;
 use std::rc::Rc;
-
-fn buf(s: &str) -> Rc<[char]> {
-    s.chars().collect::<Vec<_>>().into()
-}
-
-macro_rules! assert_success {
-    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_err() {
-            panic!("Expected success, but got {:?}", result.unwrap_err());
-        }
-        let result = result.unwrap();
-        assert_that!(result.value, eq($value));
-        assert_that!(result.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        if pos.is_none() {
-            panic!("Expected position after successful parse, but got None");
-        }
-        let pos = pos.unwrap();
-        assert_that!(pos, eq($pos));
-    }
-}
-
-macro_rules! assert_failure {
-    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_ok() {
-            panic!("Expected failure, but got success {:?}", result.unwrap());
-        }
-        let failure = result.unwrap_err();
-        assert_that!(failure.message, eq($message));
-        assert_that!(failure.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        assert_that!(pos, eq(None));
-    }
-}
+use rust_petitparser::{assert_failure, assert_success};
 
 #[gtest]
 fn seq2_test() {
@@ -86,7 +51,12 @@ fn choice2_with_joiner_test() {
     };
     assert_success!(p, "ac", 'a', 1);
     assert_success!(p, "bc", 'b', 1);
-    assert_failure!(p, "cc", "expected 'a', but found 'c' OR expected 'b', but found 'c'", 0);
+    assert_failure!(
+        p,
+        "cc",
+        "expected 'a', but found 'c' OR expected 'b', but found 'c'",
+        0
+    );
 }
 
 #[gtest]

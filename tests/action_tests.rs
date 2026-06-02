@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use googletest::prelude::*;
 use rust_petitparser::core::context::Context;
 use rust_petitparser::core::parser::Parser;
@@ -10,45 +9,8 @@ use rust_petitparser::parser::ext::ParserExt;
 use rust_petitparser::parser::misc::failure::failure_with_message;
 use rust_petitparser::parser::misc::success::success;
 use rust_petitparser::parser::predicate::predicate::string;
-use std::rc::Rc;
-
-fn buf(s: &str) -> Rc<[char]> {
-    s.chars().collect::<Vec<_>>().into()
-}
-
-macro_rules! assert_success {
-    ($parser:expr, $input:expr, $value:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_err() {
-            panic!("Expected success, but got {:?}", result.unwrap_err());
-        }
-        let result = result.unwrap();
-        assert_that!(result.value, eq($value));
-        assert_that!(result.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        if pos.is_none() {
-            panic!("Expected position after successful parse, but got None");
-        }
-        let pos = pos.unwrap();
-        assert_that!(pos, eq($pos));
-    }
-}
-
-macro_rules! assert_failure {
-    ($parser:expr, $input:expr, $message:expr, $pos:expr) => {
-        let result = $parser.parse($input);
-        if result.is_ok() {
-            panic!("Expected failure, but got success {:?}", result.unwrap());
-        }
-        let failure = result.unwrap_err();
-        assert_that!(failure.message, eq($message));
-        assert_that!(failure.context.position, eq($pos));
-
-        let pos = $parser.fast_parse_on(buf($input), 0);
-        assert_that!(pos, eq(None));
-    }
-}
+use std::fmt::Debug;
+use rust_petitparser::{assert_failure, assert_success};
 
 #[gtest]
 fn map_test() {
@@ -132,7 +94,10 @@ fn only_if_with_message() {
 #[gtest]
 fn only_if_with_factory() {
     fn factory<T: Debug>(context: &Context, value: Success<T>) -> ParseResult<T> {
-        Err(Failure { context: context.clone(), message: format!("{:?} is not divisible by 7", value.value) })
+        Err(Failure {
+            context: context.clone(),
+            message: format!("{:?} is not divisible by 7", value.value),
+        })
     }
     let p = digit()
         .plus()
@@ -147,9 +112,7 @@ fn only_if_with_factory() {
 
 #[gtest]
 fn flat_map() {
-    let p = digit().flat_map::<_, Vec<char>>(|n| {
-        letter().times(n.to_digit(10).unwrap() as usize)
-    });
+    let p = digit().flat_map::<_, Vec<char>>(|n| letter().times(n.to_digit(10).unwrap() as usize));
     assert_success!(p, "3abc", &vec!['a', 'b', 'c'], 4);
     assert_success!(p, "0", &vec![], 1);
     assert_failure!(p, "3ab*", "expected letter, but found '*'", 3);
@@ -159,9 +122,7 @@ fn flat_map() {
 #[gtest]
 fn flat_map_continues_correctly() {
     let p = seq2(
-        digit().flat_map::<_, Vec<char>>(|n| {
-            letter().times(n.to_digit(10).unwrap() as usize)
-        }),
+        digit().flat_map::<_, Vec<char>>(|n| letter().times(n.to_digit(10).unwrap() as usize)),
         char('*'),
     );
     assert_success!(p, "3abc*", &(vec!['a', 'b', 'c'], '*'), 5);

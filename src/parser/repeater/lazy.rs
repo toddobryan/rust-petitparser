@@ -1,4 +1,4 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -29,7 +29,7 @@ where
         while elements.len() < self.min {
             let result = self.delegate.parse_on(&current)?;
             assert!(
-                current.position < result.context.position,
+                current.position() < result.position(),
                 "{:?} must always consume",
                 self.delegate
             );
@@ -39,22 +39,22 @@ where
         loop {
             let limiter = self.limit.parse_on(&current);
             match limiter {
-                Ok(_) => return current.success(elements, current.position),
+                Ok(_) => return current.success(elements),
                 Err(f) => {
-                    if !self.max.is_none() && elements.len() >= self.max.unwrap() {
+                    if self.max.is_some() && elements.len() >= self.max.unwrap() {
                         return Err(f);
                     } else {
                         let result = self.delegate.parse_on(&current);
                         match result {
                             Err(_) => return Err(f),
-                            Ok(s) => {
+                            Ok(success) => {
                                 assert!(
-                                    current.position < s.context.position,
+                                    current.position() < success.position(),
                                     "Delegate parser {:?} must always consume",
                                     self.delegate
                                 );
-                                current = s.context;
-                                elements.push(s.value);
+                                current = success.context;
+                                elements.push(success.value);
                             }
                         }
                     }
@@ -77,7 +77,7 @@ where
             match limiter {
                 Some(_) => return Some(current),
                 None => {
-                    if !self.max.is_none() && count >= self.max.unwrap() {
+                    if self.max.is_some() && count >= self.max.unwrap() {
                         return None;
                     }
                     let result = self.delegate.fast_parse_on(buffer.clone(), current)?;

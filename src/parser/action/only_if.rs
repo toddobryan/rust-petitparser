@@ -15,7 +15,10 @@ pub struct OnlyIfParser<P, T> {
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, T> OnlyIfParser<P, T> where P: Parser<T>, T: Debug
+impl<P, T> OnlyIfParser<P, T>
+where
+    P: Parser<T>,
+    T: Debug,
 {
     fn make_factory(&self, context: &Context, result: Success<T>) -> ParseResult<T> {
         match self.factory {

@@ -12,11 +12,11 @@ pub struct Context {
 pub trait HasContext {
     fn buffer(&self) -> Rc<[char]>;
     fn position(&self) -> usize;
-    
+
     fn success<T>(&self, value: T) -> ParseResult<T> {
         self.success_with_position(value, self.position())
     }
-    
+
     fn success_with_position<T>(&self, value: T, position: usize) -> ParseResult<T> {
         Ok(Success {
             context: Context {
@@ -26,12 +26,16 @@ pub trait HasContext {
             value,
         })
     }
-    
+
     fn failure<T>(&self, message: impl Into<String>) -> ParseResult<T> {
         self.failure_with_position(message, self.position())
     }
-    
-    fn failure_with_position<T>(&self, message: impl Into<String>, position: usize) -> ParseResult<T> {
+
+    fn failure_with_position<T>(
+        &self,
+        message: impl Into<String>,
+        position: usize,
+    ) -> ParseResult<T> {
         Err(Failure {
             context: Context {
                 buffer: self.buffer().clone(),
@@ -58,7 +62,12 @@ impl HasContext for Context {
 
 impl Display for Context {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Context[{}={}]", self.position, self.to_position_string())
+        write!(
+            f,
+            "Context[{}={}]",
+            self.position,
+            self.to_position_string()
+        )
     }
 }
 
