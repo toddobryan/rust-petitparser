@@ -94,7 +94,7 @@ src/
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
 - `epsilon()`, `epsilon_with(T)`, `success(T)`, `failure()`, `failure_with_message(String)`
 - `position()` — returns current position as `usize` without consuming
-- `SettableParser<T>` for recursive grammars
+- `SettableParser<T>` / `SettableParserRef<T>` for recursive grammars (cycle-free)
 - `line_and_column_of`
 - JSON example grammar (full, with recursive `SettableParser`)
 - Arithmetic expression grammar (`tests/example-grammars/expr.rs`)
@@ -105,5 +105,47 @@ src/
 
 ## What's Next
 - Port remaining dart-petitparser tests (repeat_lazy success cases, etc.)
-- Add float support to expr grammar (fraction + exponent)
-- `GrammarDefinition` — probably defer
+- `#[grammar]` proc macro (replaces manual SettableParser boilerplate)
+
+## `#[grammar]` Proc Macro Design
+
+### Usage
+```rust
+#[grammar]
+mod expr_grammar {
+    pub fn start() -> impl Parser<f64> { add_expr().end() }
+    fn atom() -> impl Parser<f64> { ... }           // internal, no accessor
+    fn mul_expr() -> impl Parser<f64> { ... }       // internal, no accessor
+    pub fn add_expr() -> impl Parser<f64> { ... }   // exposed for testing
+}
+
+let g = ExprGrammar::new();
+g.parse_on(&ctx);             // Parser<f64> impl delegates to start
+g.add_expr().parse_on(&ctx);  // pub accessor → SettableParserRef<f64>
+```
+
+### What the macro generates
+- Struct named after module in PascalCase (`expr_grammar` → `ExprGrammar`)
+- All rules stored as `SettableParser<T>` fields (strong Rcs — keep parsers alive)
+- `new()` method: declares all `SettableParser::undefined()`, calls `.set()` on each
+- Inter-rule calls in bodies (e.g. `atom()`) rewritten to `atom.borrow()` (Weak ref)
+- Public accessor methods for `pub fn` rules → return `SettableParserRef<T>`
+- `Parser<T>` impl delegates to `self.start`
+- `start()` return type determines the grammar's output type `T`
+
+### Crate structure
+- New crate: `rust-petitparser-macros` with `proc-macro = true`
+- Dependencies: `syn` (features = ["full"]), `quote`, `proc-macro2`, `heck`
+- Re-export `grammar` from main crate's `lib.rs`
+
+### Key implementation steps
+1. `parse_macro_input!(item as ItemMod)` — parse the module
+2. `module.ident.to_string().to_upper_camel_case()` (heck) — struct name
+3. Collect `Item::Fn` items; split on `Visibility::Public` vs `Visibility::Inherited`
+4. Extract `T` from `-> impl Parser<T>`: drill through `ReturnType::Type → Type::ImplTrait → TraitBound → PathArguments::AngleBracketed`
+5. `VisitMut` on each function body: replace zero-arg calls to known rule names with `rule_name.borrow()`
+   - In `visit_expr_mut`: match `Expr::Call` with empty args + `Expr::Path` func → known name → `*expr = parse_quote!(#ident.borrow()); return;`
+6. `quote!` to emit struct, `new()`, accessors, `Parser<T>` impl
+
+### Testing during development
+- `cargo install cargo-expand` then `cargo expand --test example-grammars` to see generated code

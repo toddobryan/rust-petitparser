@@ -1,7 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::core::parser::Parser;
-use rust_petitparser::parser::character::character::{char, digit, letter, word};
-use rust_petitparser::parser::ext::ParserExt;
+use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use std::panic;
 

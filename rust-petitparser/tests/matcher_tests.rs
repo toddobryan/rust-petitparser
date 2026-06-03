@@ -1,7 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::parser::character::character::char;
-use rust_petitparser::parser::combinator::sequence::seq2;
-use rust_petitparser::parser::ext::ParserExt;
+use rust_petitparser::prelude::*;
 use std::rc::Rc;
 
 #[gtest]

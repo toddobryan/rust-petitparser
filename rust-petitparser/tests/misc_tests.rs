@@ -1,15 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::core::parser::Parser;
-use rust_petitparser::core::token::line_and_column_of;
-use rust_petitparser::parser::character::character::char;
-use rust_petitparser::parser::combinator::choice::choice2;
-use rust_petitparser::parser::combinator::sequence::seq2;
-use rust_petitparser::parser::ext::ParserExt;
-use rust_petitparser::parser::misc::end::eof;
-use rust_petitparser::parser::misc::epsilon::{epsilon, epsilon_with};
-use rust_petitparser::parser::misc::failure::{failure, failure_with_message};
-use rust_petitparser::parser::misc::success::success;
-use rust_petitparser::parser::predicate::predicate::string;
+use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use std::rc::Rc;
 

@@ -252,7 +252,7 @@ pub fn word() -> CharParser {
     }
 }
 
-pub fn predicate<F>(test: F, description: impl Into<String>) -> PredicateCharParser
+pub fn char_if<F>(test: F, description: impl Into<String>) -> PredicateCharParser
 where
     F: Fn(char) -> bool + 'static,
 {

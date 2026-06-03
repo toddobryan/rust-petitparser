@@ -1,14 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::core::context::Context;
-use rust_petitparser::core::parser::Parser;
-use rust_petitparser::core::result::{Failure, ParseResult, Success};
-use rust_petitparser::core::token::Token;
-use rust_petitparser::parser::character::character::{char, digit, letter};
-use rust_petitparser::parser::combinator::sequence::seq2;
-use rust_petitparser::parser::ext::ParserExt;
-use rust_petitparser::parser::misc::failure::failure_with_message;
-use rust_petitparser::parser::misc::success::success;
-use rust_petitparser::parser::predicate::predicate::string;
+use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use std::fmt::Debug;
 

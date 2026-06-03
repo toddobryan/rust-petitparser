@@ -1,13 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::core::parser::Parser;
-use rust_petitparser::parser::character::character::{char, letter};
-use rust_petitparser::parser::combinator::choice::{
-    Choice2, SELECT_FARTHEST_JOINED, choice2, choice3,
-};
-use rust_petitparser::parser::combinator::sequence::{seq2, seq3, seq4};
-use rust_petitparser::parser::combinator::settable::SettableParser;
-use rust_petitparser::parser::ext::ParserExt;
-use rust_petitparser::parser::predicate::predicate::string;
+use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 
 #[gtest]

@@ -6,8 +6,9 @@ use crate::parser::action::flat_map::FlatMapParser;
 use crate::parser::action::input::InputParser;
 use crate::parser::action::map::MapParser;
 use crate::parser::action::only_if::OnlyIfParser;
+use crate::parser::action::to::ToParser;
 use crate::parser::action::token::TokenParser;
-use crate::parser::character::character::whitespace;
+use crate::parser::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
 use crate::parser::combinator::sequence::seq3;
 use crate::parser::combinator::skip::SkipParser;
@@ -47,6 +48,14 @@ where
             delegate: self,
             f,
             from_type: PhantomData,
+        }
+    }
+
+    fn to<V>(self, value: V) -> ToParser<T, Self, V> {
+        ToParser {
+            delegate: self,
+            value,
+            delegate_type: PhantomData,
         }
     }
 

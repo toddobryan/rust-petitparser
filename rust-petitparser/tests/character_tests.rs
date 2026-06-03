@@ -1,9 +1,5 @@
 use googletest::prelude::*;
-use rust_petitparser::core::parser::Parser;
-use rust_petitparser::parser::character::character::{
-    any, char, char_ci, digit, digit_with_radix, letter, lowercase, none_of, none_of_ci, one_of,
-    one_of_ci, predicate, uppercase, whitespace, word,
-};
+use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 
 // char
@@ -202,13 +198,13 @@ fn word_fails_on_space() {
 
 #[gtest]
 fn predicate_matches() {
-    let p = predicate(|c| c == 'x' || c == 'y', "x or y");
+    let p = char_if(|c| c == 'x' || c == 'y', "x or y");
     assert_success!(p, "xz", 'x', 1);
 }
 
 #[gtest]
 fn predicate_fails() {
-    let p = predicate(|c| c == 'x' || c == 'y', "x or y");
+    let p = char_if(|c| c == 'x' || c == 'y', "x or y");
     assert_failure!(p, "az", "expected x or y, but found 'a'", 0);
 }
 
