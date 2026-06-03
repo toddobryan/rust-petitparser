@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 #[gtest]
 fn map_test() {
-    let p = char('a').map(|c| String::from(c));
+    let p = char('a').map(String::from);
     assert_success!(p, "abc", "a", 1);
     assert_failure!(p, "bc", "expected 'a', but found 'b'", 0);
 }
@@ -14,16 +14,8 @@ fn map_test() {
 fn token_test() {
     let p = char('a').plus().token();
     let success = p.parse("aaab").unwrap();
-    assert_that!(success.context.position, eq(3));
-    assert_that!(
-        success.value,
-        eq(&Token::new(
-            vec!['a', 'a', 'a'],
-            success.context.buffer.clone(),
-            0,
-            3
-        ))
-    );
+    let tok = Token::new(vec!['a', 'a', 'a'], success.context.buffer.clone(), 0, 3);
+    assert_success!(p, "aaab", &tok, 3);
 }
 
 #[gtest]
@@ -41,13 +33,13 @@ fn token_line_and_column() {
 #[gtest]
 fn trim_test() {
     let p = string("hello").trim();
-    assert_success!(p, "  hello  ", "hello", 9);
+    assert_success!(p, "  hello  ", "hello");
 }
 
 #[gtest]
 fn input_test() {
     let p = letter().plus().input();
-    assert_success!(p, "abc", "abc", 3);
+    assert_success!(p, "abc", "abc");
     assert_failure!(p, "123", "expected letter, but found '1'", 0);
 }
 
@@ -121,7 +113,7 @@ fn flat_map_continues_correctly() {
 
 #[gtest]
 fn flat_map_degenerate_cases() {
-    let p = success(42).flat_map::<_, char>(|n| char(('0' as u8 + *n as u8) as char));
+    let p = success(42).flat_map::<_, char>(|n| char((b'0' + *n as u8) as char));
     assert_success!(p, "Z", 'Z', 1);
 
     let p = failure_with_message("oops".to_string()).flat_map(|_| char('x'));

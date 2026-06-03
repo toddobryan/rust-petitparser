@@ -38,6 +38,36 @@ fn string_fails_on_mismatch() {
 }
 
 #[gtest]
+fn string_mismatch_reports_message() {
+    // same length, wrong content -> the literal-expected message (not the short-input one)
+    assert_failure!(string("foo"), "bar", "Expected string: \"foo\"", 0);
+}
+
+// string_ignore_case
+
+#[gtest]
+fn string_ignore_case_matches_same_case() {
+    assert_success!(string_ignore_case("foo"), "foo!", "foo", 3);
+}
+
+#[gtest]
+fn string_ignore_case_matches_other_case() {
+    // returns the actual matched substring, preserving the input's case
+    assert_success!(string_ignore_case("foo"), "FOO!", "FOO", 3);
+    assert_success!(string_ignore_case("foo"), "fOo!", "fOo", 3);
+}
+
+#[gtest]
+fn string_ignore_case_fails_on_mismatch() {
+    assert_failure!(
+        string_ignore_case("foo"),
+        "bar",
+        "Expected string (case-insensitive): \"foo\"",
+        0
+    );
+}
+
+#[gtest]
 fn string_fails_on_short_input() {
     let p = string("hello");
     assert!(p.parse("hi").is_err());

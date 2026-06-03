@@ -32,6 +32,7 @@ macro_rules! choice_impl {
             }
         }
 
+        #[allow(clippy::too_many_arguments)]
         pub fn $func<$($parser),+>($($value: $parser,)+) -> $name<$($parser),+> {
             $name { $($value,)+ joiner: SELECT_FARTHEST }
         }

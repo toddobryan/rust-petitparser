@@ -306,3 +306,129 @@ fn with_message_at_end_of_input() {
     let p = letter().with_message("expected a letter");
     assert_failure!(p, "", "expected a letter", 0);
 }
+
+// any: accepts arbitrary code points (including astral/emoji)
+
+#[gtest]
+fn any_matches_unicode() {
+    assert_success!(any(), "λx", 'λ', 1);
+    assert_success!(any(), "🤔!", '🤔', 1);
+}
+
+// empty-input failures (each char parser must fail at position 0 on "")
+
+#[gtest]
+fn digit_fails_at_end_of_input() {
+    assert_failure!(digit(), "", "expected digit, but reached end of input", 0);
+}
+
+#[gtest]
+fn lowercase_fails_at_end_of_input() {
+    assert_failure!(
+        lowercase(),
+        "",
+        "expected lowercase letter, but reached end of input",
+        0
+    );
+}
+
+#[gtest]
+fn uppercase_fails_at_end_of_input() {
+    assert_failure!(
+        uppercase(),
+        "",
+        "expected uppercase letter, but reached end of input",
+        0
+    );
+}
+
+#[gtest]
+fn whitespace_fails_at_end_of_input() {
+    assert_failure!(
+        whitespace(),
+        "",
+        "expected whitespace, but reached end of input",
+        0
+    );
+}
+
+#[gtest]
+fn word_fails_at_end_of_input() {
+    assert_failure!(
+        word(),
+        "",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        0
+    );
+}
+
+// whitespace: full set of accepted code points + non-whitespace rejection
+
+#[gtest]
+fn whitespace_matches_newline() {
+    assert_success!(whitespace(), "\nx", '\n', 1);
+}
+
+#[gtest]
+fn whitespace_matches_carriage_return() {
+    assert_success!(whitespace(), "\rx", '\r', 1);
+}
+
+#[gtest]
+fn whitespace_matches_form_feed() {
+    assert_success!(whitespace(), "\u{0c}x", '\u{0c}', 1);
+}
+
+#[gtest]
+fn whitespace_matches_vertical_tab() {
+    assert_success!(whitespace(), "\u{0b}x", '\u{0b}', 1);
+}
+
+#[gtest]
+fn whitespace_fails_on_digit() {
+    assert_failure!(whitespace(), "1x", "expected whitespace, but found '1'", 0);
+}
+
+// per-parser custom messages (with_message)
+
+#[gtest]
+fn any_with_message() {
+    assert_failure!(
+        any().with_message("something expected"),
+        "",
+        "something expected",
+        0
+    );
+}
+
+#[gtest]
+fn digit_with_message() {
+    assert_failure!(
+        digit().with_message("number expected"),
+        "a",
+        "number expected",
+        0
+    );
+}
+
+#[gtest]
+fn whitespace_with_message() {
+    assert_failure!(
+        whitespace().with_message("gimme space"),
+        "a",
+        "gimme space",
+        0
+    );
+}
+
+#[gtest]
+fn one_of_with_message() {
+    let p = one_of("02468").with_message("even digit");
+    assert_failure!(p, "1", "even digit", 0);
+}
+
+#[gtest]
+fn none_of_with_message() {
+    let p = none_of("02468").with_message("no even digit");
+    assert_failure!(p, "2", "no even digit", 0);
+}

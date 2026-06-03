@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use googletest::prelude::*;
 use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use rust_petitparser_macros::grammar;
+use std::rc::Rc;
 
 #[grammar]
 mod expr_grammar {
@@ -10,7 +10,7 @@ mod expr_grammar {
         add_expr().end()
     }
 
-    fn add_expr() -> impl Parser<f64> {
+    pub fn add_expr() -> impl Parser<f64> {
         seq2(mul_expr(), seq2(one_of("+-").trim(), mul_expr()).star()).map(|x| fold_ops(&x))
     }
 
@@ -78,6 +78,12 @@ fn groups_and_precedence() {
     assert_success!(p, "10 - 2 - 3", 5.0, 10);
     assert_success!(p, "8 / 4 / 2", 1.0, 9);
     assert_success!(p, "1 + ((2 * 3))", 7.0, 13);
+}
+
+#[gtest]
+fn test_that_pub_parser_can_be_called() {
+    let p = ExprGrammar::new();
+    assert_success!(p.add_expr(), "1 + 2", 3.0, 5);
 }
 
 #[gtest]

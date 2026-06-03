@@ -1,10 +1,10 @@
-use proc_macro::TokenStream;
 use heck::ToUpperCamelCase;
+use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::collections::HashSet;
-use syn::visit_mut::{self, VisitMut};
 use syn::parse_macro_input;
+use syn::visit_mut::{self, VisitMut};
 
 #[proc_macro_attribute]
 pub fn grammar(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -14,6 +14,8 @@ pub fn grammar(_attr: TokenStream, item: TokenStream) -> TokenStream {
         &module.ident.to_string().to_upper_camel_case(),
         module.ident.span(),
     );
+
+    let mod_vis = &module.vis;
 
     let items = match &module.content {
         Some((_, items)) => items,
@@ -84,8 +86,9 @@ pub fn grammar(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .map(|f| {
             let name = &f.sig.ident;
             let ty = parser_type(f);
+            let fvis = &f.vis;
             quote! {
-                fn #name(&self) -> SettableParser<#ty> {
+                #fvis fn #name(&self) -> SettableParserRef<#ty> {
                     self.#name.borrow()
                 }
             }
@@ -94,12 +97,12 @@ pub fn grammar(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let output = quote! {
         #[derive(Debug)]
-        pub struct #struct_name {
+        #mod_vis struct #struct_name {
             #(#field_decls),*
         }
 
         impl #struct_name {
-            pub fn new() -> Self {
+            #mod_vis fn new() -> Self {
                 #(#undefined_decls)*
                 #(#set_calls)*
                 Self {

@@ -2,6 +2,7 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::matcher::matches::MatchesIterable;
+use crate::parser::action::continuation::{Continuation, ContinuationParser};
 use crate::parser::action::flat_map::FlatMapParser;
 use crate::parser::action::input::InputParser;
 use crate::parser::action::map::MapParser;
@@ -18,6 +19,7 @@ use crate::parser::misc::label::LabeledParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
+use crate::prelude::any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -161,9 +163,35 @@ where
     }
 
     fn not(self) -> impl Parser<Failure> {
+        self.not_with_message("success not expected".to_string())
+    }
+
+    fn not_with_message(self, message: String) -> impl Parser<Failure> {
         NotParser {
             delegate: self,
             delegate_type: PhantomData,
+            message,
+        }
+    }
+
+    fn neg(self) -> impl Parser<char> {
+        self.neg_with_message("input not expected".to_string())
+    }
+
+    fn neg_with_message(self, message: String) -> impl Parser<char> {
+        any().skip_left(self.not_with_message(message))
+    }
+
+    fn call_cc<T2, H>(self, handler: H) -> ContinuationParser<T, T2, H>
+    where
+        Self: Sized + 'static,
+        T: 'static,
+        H: Fn(Continuation<T>, &Context) -> ParseResult<T2>,
+    {
+        ContinuationParser {
+            delegate: Rc::new(self),
+            handler,
+            result_type: PhantomData,
         }
     }
 

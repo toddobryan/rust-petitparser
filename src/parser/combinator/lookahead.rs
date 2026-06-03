@@ -1,6 +1,7 @@
 use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult, Success};
+use crate::prelude::HasContext;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -31,6 +32,7 @@ where
 pub struct NotParser<T, P> {
     pub delegate: P,
     pub delegate_type: PhantomData<T>,
+    pub message: String,
 }
 
 impl<T, P> Parser<Failure> for NotParser<T, P>
@@ -41,14 +43,8 @@ where
     fn parse_on(&self, context: &Context) -> ParseResult<Failure> {
         let result = self.delegate.parse_on(context);
         match result {
-            Ok(success) => Err(Failure {
-                context: context.clone(),
-                message: format!("Expected failure, got success: {:?}", success.value),
-            }),
-            Err(failure) => Ok(Success {
-                context: context.clone(),
-                value: failure,
-            }),
+            Ok(_) => context.failure(self.message.clone()),
+            Err(failure) => context.success(failure),
         }
     }
 }

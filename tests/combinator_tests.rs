@@ -109,7 +109,7 @@ fn not_succeeds_when_inner_fails() {
 #[gtest]
 fn not_fails_when_inner_succeeds() {
     let p = char('a').not();
-    assert_failure!(p, "abc", "Expected failure, got success: 'a'", 0);
+    assert_failure!(p, "abc", "success not expected", 0);
 }
 
 #[gtest]
@@ -117,7 +117,19 @@ fn not_succeeds_without_advancing() {
     let p = seq2(char('z').not(), letter().star()).map(|(_, ls)| ls);
     assert_success!(p, "abc", &vec!['a', 'b', 'c'], 3);
     assert_success!(p, "yz", &vec!['y', 'z'], 2);
-    assert_failure!(p, "zyx", "Expected failure, got success: 'z'", 0);
+    assert_failure!(p, "zyx", "success not expected", 0);
+}
+
+#[gtest]
+fn not_with_message() {
+    let p = seq2(
+        char('z').not_with_message("expected any character but 'z'".to_string()),
+        letter().star(),
+    )
+    .map(|(_, ls)| ls);
+    assert_success!(p, "abc", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "yz", &vec!['y', 'z'], 2);
+    assert_failure!(p, "zyx", "expected any character but 'z'", 0);
 }
 
 #[gtest]

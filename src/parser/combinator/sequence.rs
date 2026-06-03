@@ -25,6 +25,7 @@ macro_rules! impl_seq {
             }
         }
 
+        #[allow(clippy::too_many_arguments)]
         pub fn $func<$($parser),+>($($field: $parser,)+) -> $name<$($parser),+> {
             $name { $($field,)+ }
         }

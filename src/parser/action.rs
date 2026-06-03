@@ -1,3 +1,4 @@
+pub mod continuation;
 pub mod flat_map;
 pub mod input;
 pub mod map;

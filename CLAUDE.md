@@ -6,42 +6,57 @@ A Rust port of PetitParser (originally Dart/Java).
 - Provide hints and structural guidance, not full code — let the user implement with guidance
 - Give type signatures, key gotchas, and design rationale
 
+## Workspace Layout
+The repo root **is** the `rust-petitparser` library package, and it also owns a Cargo workspace
+(root `Cargo.toml` has both `[package]` and `[workspace]`). The only other member:
+- `rust-petitparser-macros/` — proc-macro crate exposing `#[grammar]` (see proc macro section),
+  pulled in via `rust-petitparser-macros = { path = "rust-petitparser-macros" }`
+
+The root package is an implicit workspace member, so `[workspace].members` lists only the macros
+crate. Single `Cargo.lock` at the root.
+
+`src/lib.rs` keeps `core`/`matcher`/`parser` as `pub(crate)`; the only public surface is
+`pub mod prelude` plus a re-export of `grammar`. Downstream code (and the example grammars) does
+`use rust_petitparser::prelude::*;` — the prelude re-exports the `Parser` trait, `ParserExt`,
+`Context`/`Success`/`Failure`/`ParseResult`, `Token`, all parser constructors, the
+`assert_success!`/`assert_failure!` macros, and `grammar`.
+
 ## Module Structure
 ```
 src/
+  prelude.rs    - public re-export surface (see Workspace Layout)
   core/
     context.rs    - Context, Success, Failure, ParseResult
     parser.rs     - Parser trait
     result.rs     - ParseResult type alias
-    token.rs      - Token<T> struct
-    error.rs
+    token.rs      - Token<T>, line_and_column_of, position_string
+    test_helpers.rs
   parser/
-    character/character.rs  - CharParser, PredicateCharParser, any(), char(), letter(), digit(), one_of(), etc.
+    character.rs  - CharParser, PredicateCharParser, any(), char(), letter(), digit(), one_of(), etc.
     combinator/
       choice.rs     - Choice2-9 via choice_impl! macro
       sequence.rs   - Seq2-9 via impl_seq! macro
-      settable.rs   - SettableParser<T> for recursive grammars
+      settable.rs   - SettableParser<T> / SettableParserRef<T> for recursive grammars
       lookahead.rs  - AndParser<T,P>, NotParser<T,P>
+      skip.rs       - SkipParser (open, content, close → content)
     action/
       map.rs      - MapParser<T, P, F> (needs PhantomData<T>)
       token.rs    - TokenParser<P>
       input.rs    - InputParser (flatten matched chars to String)
       only_if.rs  - OnlyIfParser (predicate gate on success value)
       flat_map.rs - FlatMapParser (monadic bind: value → next parser)
+      to.rs       - ToParser<T,P,V> (.to(value) — replace matched value with a clone, V: Clone)
     repeater/
       possessive.rs  - PossessiveRepeatingParser { min, max }
       separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
       lazy.rs        - LazyRepeatingParser<P, T, PC, TC> { delegate, limit, min, max }
-    predicate/
-      predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
+    predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
     ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
                     token, trim, input, input_with_message, only_if, only_if_with_message,
                     only_if_with_factory, all_matches, and, not, labeled, skip,
-                    skip_left, skip_right, end,
+                    skip_left, skip_right, end, to,
                     rep_sep, star_sep, plus_sep,
                     rep_lazy, star_lazy, plus_lazy
-    combinator/
-      skip.rs     - SkipParser (open, content, close → content)
     misc/
       newline.rs
       end.rs      - EndOfInputParser, eof(), eof_with_message()
@@ -52,11 +67,15 @@ src/
       position.rs - PositionParser, position()
   matcher/
     matches.rs    - MatchesIterator<T,P>, MatchesIterable<T,P> (IntoIterator)
+
+rust-petitparser-macros/src/
+  lib.rs        - #[grammar] proc-macro attribute
 ```
 
 ## Key Design Decisions
 - `Parser<T>` is generic over `T` (not an associated type). This means impls where `T` only appears in the `where` clause (not the Self type or trait) require `PhantomData<T>` in the struct — see `MapParser`.
 - `ParserExt<T>: Parser<T> + Sized where T: Debug` extension trait provides method syntax. Blanket impl covers all parsers.
+- Blanket `impl<T, P: Parser<T> + ?Sized> Parser<T> for Rc<P>` (in `core/parser.rs`) — lets `Rc<P>` and `Rc<dyn Parser<T>>` be used as parsers (delegates `parse_on`/`fast_parse_on`). Needed to share a sub-parser across multiple combinators via `Rc::new(..).clone()` (our parsers aren't generally `Clone`). `Rc<P>` is `Sized`, so it auto-gets `ParserExt` too.
 - `choice_impl!` macro uses `Option<Failure>` accumulation pattern (avoids needing to separate "first" from "rest").
 - `impl_seq!` macro uses `?` operator with sequential context threading.
 - `MatchesIterable` implements `IntoIterator` → `MatchesIterator`; supports `overlapping` flag.
@@ -75,8 +94,9 @@ src/
   `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`
 - Each test file defines `assert_success!(parser, input, value, pos)` and `assert_failure!(parser, input, message, pos)`
   macros that check both `parse_on` and `fast_parse_on`
-- Example grammars: `tests/example-grammars/main.rs` (entry point) + `tests/example-grammars/json.rs` + `tests/example-grammars/expr.rs`
-- 159 tests passing
+- Example grammars: `tests/example-grammars/main.rs` (entry point) +
+  `json.rs` + `expr.rs` — both now written with the `#[grammar]` proc macro
+- 137 tests passing
 
 ## What's Implemented
 - Character parsers: `any`, `char`, `char_ci`, `letter`, `digit`, `digit_with_radix`, `one_of`, `one_of_ci`,
@@ -89,6 +109,7 @@ src/
 - `rep_lazy`, `star_lazy`, `plus_lazy` (lazy repeaters with limit parser)
 - `skip(open, close)` — wraps parser between delimiters, returns inner value
 - `skip_left(before)`, `skip_right(after)`, `end()` — variants of skip
+- `to(value)` — replaces the matched value with a clone of `value` (`V: Clone + Debug`)
 - `labeled(label)` — replaces failure message
 - `string(&str)`, `string_ignore_case(&str)` via `PredicateParser`
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
@@ -102,12 +123,33 @@ src/
   - Parenthesized subexpressions via recursive `SettableParser`
   - `fold_ops` pattern: `fn(&(f64, Vec<(char, f64)>)) -> f64` with left fold
   - Note: `SkipParser` does NOT need `T: Clone` — removed that bound
+- `#[grammar]` proc macro (`rust-petitparser-macros`) — replaces manual SettableParser
+  boilerplate; drives both the expr and JSON example grammars
 
 ## What's Next
-- Port remaining dart-petitparser tests (repeat_lazy success cases, etc.)
-- `#[grammar]` proc macro (replaces manual SettableParser boilerplate)
+- Port remaining dart-petitparser tests toward parity (scope A = features we already have).
+  Done so far: character/predicate gap-fills, `string_ignore_case`, `context_tests.rs`.
+  Remaining portable-now: newline + `position()` tests; combinator (choice joiner matrices,
+  `seq3` failure positions, settable wrap+message, skip none/before/after); finish the
+  commented-out `lazy > repeat` block in `repeater_tests.rs`; possessive `times`/`repeat`/
+  unbounded/infinite-loop; richer action `input`/`map`/`token`; representative sequence subset.
+  Deferred (needs new features, scope B/C): greedy repeaters, `SeparatedList` typed results,
+  string repeaters, `opt_with`, graceful `undefined()` failure,
+  `permute`/`pick`/`continuation`/`join`, custom-delimiter `trim`,
+  `pattern`/`range`/regex/unicode char parsers, reflection/introspection (`children`, `copy`,
+  deep-equality — needed for dart's `expectParserInvariants` assertions).
+  (`not_with_message`/`neg`/`neg_with_message` are now implemented.)
+- **Deliberately NOT ported:** dart's `cast` / `castList` parsers. Rust has no easy runtime
+  cast, and the idiomatic equivalent is for callers to `impl From<T>` and use `.map(Into::into)`
+  / `.into()`. Don't add these even for test parity.
+- **Variadic `seq!` / `choice!` macros** so callers don't hard-code the arity (no more `seq3`,
+  `choice6`). Idea: a `macro_rules!` that counts its args and dispatches to the existing
+  fixed-arity `Seq2..9` / `Choice2..9` (e.g. `seq!(a,b,c)` → `seq3(a,b,c)`). Keeps the current
+  tuple-typed return (`seq3` → `(A,B,C)`); the macro is just sugar over `impl_seq!`/`choice_impl!`.
+  Gotcha: still capped at arity 9 until more `SeqN`/`ChoiceN` are generated (or a nested fallback
+  is added); decide what happens at 10+ args.
 
-## `#[grammar]` Proc Macro Design
+## `#[grammar]` Proc Macro (implemented)
 
 ### Usage
 ```rust
@@ -149,3 +191,13 @@ g.add_expr().parse_on(&ctx);  // pub accessor → SettableParserRef<f64>
 
 ### Testing during development
 - `cargo install cargo-expand` then `cargo expand --test example-grammars` to see generated code
+
+### Gotchas
+- **No left-recursion handling.** Like dart-petitparser, the macro builds a PEG-style recursive
+  descent grammar with no packrat/left-recursion support. A rule that re-enters itself without
+  consuming input first (e.g. `array → json_value → array`) recurses forever → stack overflow.
+  Make recursive rules consume a leading token before recursing — e.g. wrap a repetition with
+  `.skip(open, close)` around the *whole* `value (sep value)*`, NOT around the separator. The
+  original JSON stack overflow was exactly this: `.skip(...)` had been attached to the separator,
+  so `array` started by parsing `json_value()` directly. A larger `RUST_MIN_STACK` won't help —
+  the recursion is infinite, not merely deep.

@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use googletest::prelude::*;
 use rust_petitparser::assert_success;
 use rust_petitparser::prelude::*;
 use rust_petitparser_macros::grammar;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Json {
@@ -30,14 +30,14 @@ mod json_grammar {
         member()
             .star_sep(char(',').trim())
             .skip(char('{').trim(), char('}').trim())
-            .map(|members| Json::Object(members))
+            .map(Json::Object)
     }
 
     fn array() -> impl Parser<Json> {
         json_value()
             .star_sep(char(',').trim())
             .skip(char('[').trim(), char(']').trim())
-            .map(|values| Json::Array(values))
+            .map(Json::Array)
     }
 
     fn member() -> impl Parser<(String, Json)> {
@@ -52,13 +52,13 @@ mod json_grammar {
                 char('0').map(|c| c.to_string()),
                 seq2(char('0').not(), digit().plus()).input(),
             )
-                .opt(),
+            .opt(),
             fraction().opt(),
             exponent().opt(),
         )
-            .input()
-            .only_if(|s| !s.is_empty())
-            .map(|s| Json::Num(s.parse::<f64>().unwrap()))
+        .input()
+        .only_if(|s| !s.is_empty())
+        .map(|s| Json::Num(s.parse::<f64>().unwrap()))
     }
 
     fn fraction() -> impl Parser<()> {
@@ -118,15 +118,12 @@ mod json_grammar {
             .skip_left(char('u'))
             .map(|hex: Vec<char>| {
                 char::from_u32(
-                    u32::from_str_radix(
-                        hex.into_iter().collect::<String>().as_str(), 16
-                    ).unwrap(),
+                    u32::from_str_radix(hex.into_iter().collect::<String>().as_str(), 16).unwrap(),
                 )
-                    .unwrap()
+                .unwrap()
             })
     }
 }
-
 
 #[gtest]
 fn json_object_test() {

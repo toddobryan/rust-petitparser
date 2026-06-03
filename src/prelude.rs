@@ -1,7 +1,8 @@
-pub use crate::core::context::Context;
+pub use crate::core::context::{Context, HasContext};
 pub use crate::core::parser::Parser;
 pub use crate::core::result::{Failure, ParseResult, Success};
 pub use crate::core::token::{Token, line_and_column_of, position_string};
+pub use crate::parser::action::continuation::Continuation;
 pub use crate::parser::character::*;
 pub use crate::parser::combinator::choice::*;
 pub use crate::parser::combinator::sequence::*;
@@ -14,5 +15,5 @@ pub use crate::parser::misc::label::*;
 pub use crate::parser::misc::position::*;
 pub use crate::parser::misc::success::*;
 pub use crate::parser::predicate::*;
-pub use crate::{assert_success, assert_failure};
+pub use crate::{assert_failure, assert_success};
 pub use rust_petitparser_macros::grammar;
