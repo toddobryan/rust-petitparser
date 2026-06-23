@@ -49,19 +49,11 @@ fn star_with_opt_that_doesnt_consume_should_panic() {
 
     panic::set_hook(orig);
 
-    let msg = if let Some(s) = result.downcast_ref::<&str>() {
-        *s
-    } else if let Some(s) = result.downcast_ref::<String>() {
-        s.as_str()
-    } else {
-        ""
-    };
-
     assert_that!(
-        msg,
-        eq(
-            "PossessiveRepeatingParser { delegate: CharParser { kind: Exact('x'), message: None }, min: 0, max: None } must consume input"
-        )
+        panic_message(result.as_ref()),
+        eq("PossessiveRepeatingParser { delegate: CharParser \
+            { kind: Exact('x'), message: None }, min: 0, max: None } \
+             must consume input")
     );
 }
 
@@ -188,110 +180,81 @@ fn repeat_lazy() {
         1
     );
     assert_failure!(p, "a1", "expected digit, but reached end of input", 2);
+    assert_success!(p, "ab1", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "abcd1", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde1", "expected digit, but found 'e'", 4);
+    assert_failure!(p, "12", "expected digit, but reached end of input", 2);
+    assert_success!(p, "a12", &vec!['a', '1'], 2);
+    assert_success!(p, "ab12", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc12", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "abcd12", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde12", "expected digit, but found 'e'", 4);
+    assert_success!(p, "123", &vec!['1', '2'], 2);
+    assert_success!(p, "a123", &vec!['a', '1'], 2);
+    assert_success!(p, "ab123", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "abcd123", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde123", "expected digit, but found 'e'", 4);
 }
-/*
 
-expect(parser, isParseSuccess('ab1', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc1', result: ['a', 'b', 'c'], position: 3),
-);
-expect(
-parser,
-isParseSuccess('abcd1', result: ['a', 'b', 'c', 'd'], position: 4),
-);
-expect(
-parser,
-isParseFailure('abcde1', position: 4, message: 'digit expected'),
-);
-expect(
-parser,
-isParseFailure('12', position: 2, message: 'digit expected'),
-);
-expect(parser, isParseSuccess('a12', result: ['a', '1'], position: 2));
-expect(parser, isParseSuccess('ab12', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc12', result: ['a', 'b', 'c'], position: 3),
-);
-expect(
-parser,
-isParseSuccess('abcd12', result: ['a', 'b', 'c', 'd'], position: 4),
-);
-expect(
-parser,
-isParseFailure('abcde12', position: 4, message: 'digit expected'),
-);
-expect(parser, isParseSuccess('123', result: ['1', '2'], position: 2));
-expect(parser, isParseSuccess('a123', result: ['a', '1'], position: 2));
-expect(parser, isParseSuccess('ab123', result: ['a', 'b'], position: 2));
-expect(
-parser,
-isParseSuccess('abc123', result: ['a', 'b', 'c'], position: 3),
-);
-expect(
-parser,
-isParseSuccess('abcd123', result: ['a', 'b', 'c', 'd'], position: 4),
-);
-expect(
-parser,
-isParseFailure('abcde123', position: 4, message: 'digit expected'),
-);
-});
-test('repeat unbounded', () {
-final input = List.filled(100000, 'a');
-final parser = word().repeatLazy(digit(), 2, unbounded);
-expect(
-parser,
-isParseSuccess(
-'${input.join()}1111',
-result: input,
-position: input.length,
-),
-);
-});
-test('infinite loop', () {
-final inner = epsilon(), limiter = failure<void>();
-expect(
-() => inner.starLazy(limiter).parse(''),
-throwsA(
-isAssertionError.having(
-(exception) => exception.message,
-'message',
-'$inner must always consume',
-),
-),
-);
-expect(
-() => inner.starLazy(limiter).fastParseOn('', 0),
-throwsA(
-isAssertionError.having(
-(exception) => exception.message,
-'message',
-'$inner must always consume',
-),
-),
-);
-expect(
-() => inner.plusLazy(limiter).parse(''),
-throwsA(
-isAssertionError.having(
-(exception) => exception.message,
-'message',
-'$inner must always consume',
-),
-),
-);
-expect(
-() => inner.plusLazy(limiter).fastParseOn('', 0),
-throwsA(
-isAssertionError.having(
-(exception) => exception.message,
-'message',
-'$inner must always consume',
-),
-),
-);
-}, skip: !hasAssertionsEnabled());
-});
-*/
+#[gtest]
+fn repeat_lazy_unbounded() {
+    let p = word().rep_lazy(digit(), 2, None);
+    let input = format!("{}1111", "a".repeat(100_000));
+    assert_success!(p, &input, &vec!['a'; 100_000], 100_000);
+}
+
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.as_str()
+    } else {
+        ""
+    }
+}
+
+#[gtest]
+fn star_lazy_with_non_consuming_delegate_should_panic() {
+    let p = epsilon().star_lazy(failure());
+    let orig = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(|| p.parse("")).expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("Delegate parser EpsilonParser { result: () } must always consume")
+    );
+
+    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+        .expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    panic::set_hook(orig);
+}
+
+#[gtest]
+fn plus_lazy_with_non_consuming_delegate_should_panic() {
+    let p = epsilon().plus_lazy(failure());
+    let orig = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(|| p.parse("")).expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+        .expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    panic::set_hook(orig);
+}

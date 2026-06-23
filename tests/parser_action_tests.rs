@@ -51,16 +51,14 @@ fn resume() {
 
 #[gtest]
 fn success() {
-    let p = digit()
-        .call_cc(|_, ctx| ctx.success("success"));
+    let p = digit().call_cc(|_, ctx| ctx.success("success"));
     assert_success!(p, "1", "success", 0);
     assert_success!(p, "a", "success", 0);
 }
 
 #[gtest]
 fn failure() {
-    let p = digit()
-        .call_cc(|_, ctx| ctx.failure::<String>("failure"));
+    let p = digit().call_cc(|_, ctx| ctx.failure::<String>("failure"));
     assert_failure!(p, "1", "failure", 0);
     assert_failure!(p, "a", "failure", 0);
 }

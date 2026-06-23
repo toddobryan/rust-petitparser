@@ -12,6 +12,7 @@ pub use crate::parser::misc::end::*;
 pub use crate::parser::misc::epsilon::*;
 pub use crate::parser::misc::failure::*;
 pub use crate::parser::misc::label::*;
+pub use crate::parser::misc::newline::*;
 pub use crate::parser::misc::position::*;
 pub use crate::parser::misc::success::*;
 pub use crate::parser::predicate::*;

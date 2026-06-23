@@ -152,7 +152,17 @@ where
     }
 
     fn trim(self) -> impl Parser<T> {
-        seq3(whitespace().star(), self, whitespace().star()).map(|(_, val, _)| val)
+        self.trim_with(whitespace().star(), whitespace().star())
+    }
+
+    fn trim_with<A, Aft, B, Bef>(self, before: B, after: A) -> impl Parser<T>
+    where
+        A: Parser<Aft>,
+        B: Parser<Bef>,
+        Aft: Debug,
+        Bef: Debug,
+    {
+        seq3(before, self, after).map(|(_, val, _)| val)
     }
 
     fn and(self) -> impl Parser<T> {
