@@ -456,12 +456,17 @@ hit the compiler error cold):
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
   Deferred (needs new features, scope B/C): `SeparatedList` typed results, string repeaters,
-  `Token::join`, regex char parsers, reflection/introspection
+  regex char parsers, reflection/introspection
   (`children`, `copy`, deep-equality — needed for dart's `expectParserInvariants` assertions).
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
-  alias)/`pick` are now implemented.)
+  alias)/`pick`/`Token::join` are now implemented. `Token::join` is a notable example of why
+  `T: Clone`/`Debug` bounds belong on the *method* that needs them, not the surrounding
+  `impl<T> Token<T>` block — consuming the input iterator by value to build the result `Vec<T>`
+  means `join` doesn't actually need `T: Clone` at all, and an earlier draft that collected into
+  a `Vec<Token<T>>` and cloned out of it broke `Token::new` for every other caller by putting the
+  bound on the whole block instead.)
 - **Fixed: `fast_parse_on` side-effect gap.** `fast_parse_on`'s contract is "compute the resulting
   position only, no value needed" — `InputParser` already honored this. `MapParser`,
   `ConstantParser`, and `TokenParser` did not override it at all, falling back to the default blanket impl (which

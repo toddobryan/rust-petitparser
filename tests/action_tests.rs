@@ -204,6 +204,49 @@ fn token_accessors_across_mixed_line_endings() {
 }
 
 #[gtest]
+fn token_join_normal() {
+    let buffer = "1\r12\r\n123\n1234";
+    let tokens = any().token().star().parse(buffer).unwrap().value;
+
+    let joined = Token::join(tokens);
+    let expected_values: Vec<char> = buffer.chars().collect();
+    assert_that!(joined.value, eq(&expected_values));
+    assert_that!(joined.start, eq(0));
+    assert_that!(joined.end, eq(buffer.chars().count()));
+}
+
+#[gtest]
+fn token_join_reverse_order() {
+    let buffer = "1\r12\r\n123\n1234";
+    let tokens = any().token().star().parse(buffer).unwrap().value;
+
+    let joined = Token::join(tokens.into_iter().rev());
+    let mut expected_values: Vec<char> = buffer.chars().collect();
+    expected_values.reverse();
+    assert_that!(joined.value, eq(&expected_values));
+    assert_that!(joined.start, eq(0));
+    assert_that!(joined.end, eq(buffer.chars().count()));
+}
+
+#[gtest]
+#[should_panic(expected = "Token::join requires at least one token")]
+fn token_join_empty() {
+    let _ = Token::join(Vec::<Token<char>>::new());
+}
+
+#[gtest]
+#[should_panic(expected = "Token::join requires all tokens use the same buffer")]
+fn token_join_different_buffer() {
+    let buffer_a: Rc<[char]> = "12".chars().collect::<Vec<_>>().into();
+    let buffer_b: Rc<[char]> = "32".chars().collect::<Vec<_>>().into();
+    let tokens = vec![
+        Token::new('1', buffer_a, 0, 2),
+        Token::new('3', buffer_b, 0, 2),
+    ];
+    let _ = Token::join(tokens);
+}
+
+#[gtest]
 fn trim_test() {
     let p = string("hello").trim();
     assert_success!(p, "  hello  ", "hello");

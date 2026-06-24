@@ -1,6 +1,7 @@
 use crate::parser::ext::ParserExt;
 use crate::parser::misc::newline::newline;
-use std::fmt::Display;
+use std::cmp::{max, min};
+use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +36,33 @@ impl<T> Token<T> {
 
     pub fn column(&self) -> usize {
         line_and_column_of(self.buffer.clone(), self.start).1
+    }
+
+    pub fn join(tokens: impl IntoIterator<Item = Token<T>>) -> Token<Vec<T>> {
+        let mut iter = tokens.into_iter();
+        let first_token = iter
+            .next()
+            .expect("Token::join requires at least one token");
+        let buffer = first_token.buffer;
+        let mut start: usize = first_token.start;
+        let mut end: usize = first_token.end;
+        let mut values: Vec<T> = vec![first_token.value];
+
+        for tok in iter {
+            assert!(
+                tok.buffer == buffer,
+                "Token::join requires all tokens use the same buffer"
+            );
+            start = min(start, tok.start);
+            end = max(end, tok.end);
+            values.push(tok.value);
+        }
+        Token {
+            value: values,
+            buffer,
+            start,
+            end,
+        }
     }
 }
 
