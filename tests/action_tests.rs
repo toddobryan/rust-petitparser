@@ -1,13 +1,92 @@
 use googletest::prelude::*;
 use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
+use std::cell::RefCell;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 #[gtest]
 fn map_test() {
     let p = char('a').map(String::from);
     assert_success!(p, "abc", "a", 1);
     assert_failure!(p, "bc", "expected 'a', but found 'b'", 0);
+}
+
+#[gtest]
+fn map_digit_to_value() {
+    let p = digit().map(|c| c as u32 - '0' as u32);
+    assert_success!(p, "1", 1u32, 1);
+    assert_success!(p, "4", 4u32, 1);
+    assert_success!(p, "9", 9u32, 1);
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "a", "expected digit, but found 'a'", 0);
+}
+
+#[gtest]
+fn map_fast_parse_on_skips_the_mapping_function() {
+    let calls = Rc::new(RefCell::new(0));
+    let calls_in_closure = calls.clone();
+    let p = digit().map(move |c| {
+        *calls_in_closure.borrow_mut() += 1;
+        c
+    });
+
+    let pos = p.fast_parse_on("1".chars().collect::<Vec<_>>().into(), 0);
+    assert_that!(pos, eq(Some(1)));
+    assert_that!(*calls.borrow(), eq(0));
+
+    // parse_on still calls it normally.
+    assert_success!(p, "1", '1', 1);
+    assert_that!(*calls.borrow(), eq(1));
+}
+
+#[derive(Debug)]
+struct CountedClone {
+    clones: Rc<RefCell<usize>>,
+}
+
+impl Clone for CountedClone {
+    fn clone(&self) -> Self {
+        *self.clones.borrow_mut() += 1;
+        CountedClone {
+            clones: self.clones.clone(),
+        }
+    }
+}
+
+#[gtest]
+fn to_fast_parse_on_skips_cloning_the_replacement_value() {
+    let clones = Rc::new(RefCell::new(0));
+    let value = CountedClone {
+        clones: clones.clone(),
+    };
+    let p = char('a').to(value);
+
+    let pos = p.fast_parse_on("a".chars().collect::<Vec<_>>().into(), 0);
+    assert_that!(pos, eq(Some(1)));
+    assert_that!(*clones.borrow(), eq(0));
+
+    // parse_on still clones the value to produce it.
+    let _ = p.parse("a").unwrap();
+    assert_that!(*clones.borrow(), eq(1));
+}
+
+#[gtest]
+fn token_fast_parse_on_skips_building_the_token_and_inner_side_effects() {
+    // Token wraps a map()'d delegate, proving the skip composes: neither the inner mapping
+    // function nor the Token construction runs on the fast path.
+    let calls = Rc::new(RefCell::new(0));
+    let calls_in_closure = calls.clone();
+    let p = digit()
+        .map(move |c| {
+            *calls_in_closure.borrow_mut() += 1;
+            c
+        })
+        .token();
+
+    let pos = p.fast_parse_on("1".chars().collect::<Vec<_>>().into(), 0);
+    assert_that!(pos, eq(Some(1)));
+    assert_that!(*calls.borrow(), eq(0));
 }
 
 #[gtest]
@@ -31,9 +110,92 @@ fn token_line_and_column() {
 }
 
 #[gtest]
+fn token_accessors_across_mixed_line_endings() {
+    // Same fixture as dart's token test: \n, \r, \r\n, and \n line endings in one buffer,
+    // exercising every Token accessor (value/buffer/start/end/length/line/column/input)
+    // in lockstep with `any().token().star()`.
+    let buffer = "1\r12\r\n123\n1234";
+    let p = any().token().star();
+    let tokens = p.parse(buffer).unwrap().value;
+
+    let expected_values: Vec<char> = buffer.chars().collect();
+    assert_that!(
+        &tokens.iter().map(|t| t.value).collect::<Vec<_>>(),
+        eq(&expected_values)
+    );
+
+    let expected_starts: Vec<usize> = (0..14).collect();
+    assert_that!(
+        &tokens.iter().map(|t| t.start).collect::<Vec<_>>(),
+        eq(&expected_starts)
+    );
+
+    let expected_ends: Vec<usize> = (1..15).collect();
+    assert_that!(
+        &tokens.iter().map(|t| t.end).collect::<Vec<_>>(),
+        eq(&expected_ends)
+    );
+
+    assert_that!(
+        &tokens.iter().map(|t| t.length()).collect::<Vec<_>>(),
+        eq(&vec![1usize; 14])
+    );
+
+    let expected_lines = vec![1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
+    assert_that!(
+        &tokens.iter().map(|t| t.line()).collect::<Vec<_>>(),
+        eq(&expected_lines)
+    );
+
+    let expected_columns = vec![1, 2, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
+    assert_that!(
+        &tokens.iter().map(|t| t.column()).collect::<Vec<_>>(),
+        eq(&expected_columns)
+    );
+
+    let expected_inputs: Vec<Vec<char>> = expected_values.iter().map(|c| vec![*c]).collect();
+    assert_that!(
+        &tokens
+            .iter()
+            .map(|t| t.input().to_vec())
+            .collect::<Vec<_>>(),
+        eq(&expected_inputs)
+    );
+
+    for token in &tokens {
+        assert_that!(token.buffer.iter().collect::<String>(), eq(buffer));
+    }
+}
+
+#[gtest]
 fn trim_test() {
     let p = string("hello").trim();
     assert_success!(p, "  hello  ", "hello");
+}
+
+#[gtest]
+fn trim_with_custom_both_sides() {
+    let p = char('a').trim_with(char('*').star(), char('*').star());
+    assert_success!(p, "a", 'a', 1);
+    assert_success!(p, "*a", 'a', 2);
+    assert_success!(p, "*a*", 'a', 3);
+    assert_success!(p, "**a**", 'a', 5);
+    assert_failure!(p, "b", "expected 'a', but found 'b'", 0);
+    assert_failure!(p, "*b", "expected 'a', but found 'b'", 1);
+    assert_failure!(p, "**b", "expected 'a', but found 'b'", 2);
+}
+
+#[gtest]
+fn trim_with_distinct_left_and_right() {
+    let p = char('a').trim_with(char('*').star(), char('#').star());
+    assert_success!(p, "a", 'a', 1);
+    assert_success!(p, "*a", 'a', 2);
+    assert_success!(p, "a#", 'a', 2);
+    assert_success!(p, "*a#", 'a', 3);
+    assert_success!(p, "**a##", 'a', 5);
+    assert_failure!(p, "b", "expected 'a', but found 'b'", 0);
+    assert_failure!(p, "*b", "expected 'a', but found 'b'", 1);
+    assert_failure!(p, "**b", "expected 'a', but found 'b'", 2);
 }
 
 #[gtest]
@@ -50,6 +212,16 @@ fn input_with_message_test() {
         .input_with_message("expected a string of letters".to_string());
     assert_success!(p, "abc", "abc", 3);
     assert_failure!(p, "123", "expected a string of letters", 0);
+}
+
+#[gtest]
+fn input_nested() {
+    // .input() composes: an inner flattened span can feed a separated-repeat whose
+    // own match is flattened again.
+    let p = digit().star().input().plus_sep(char(',')).input();
+    assert_success!(p, "1", "1", 1);
+    assert_success!(p, "1,12", "1,12", 4);
+    assert_success!(p, "1,12,123", "1,12,123", 8);
 }
 
 #[gtest]

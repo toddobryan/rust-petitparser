@@ -15,10 +15,12 @@ impl Parser<String> for NewlineParser {
         if position < buffer.len() {
             if buffer[position] == '\n' {
                 return context.success_with_position("\n".to_string(), position + 1);
-            } else if buffer[position] == '\r' && buffer[position + 1] == '\n' {
-                return context.success_with_position("\r\n".to_string(), position + 2);
             } else if buffer[position] == '\r' {
-                return context.success_with_position("\r".to_string(), position + 1);
+                return if position + 1 < buffer.len() && buffer[position + 1] == '\n' {
+                    context.success_with_position("\r\n".to_string(), position + 2)
+                } else {
+                    context.success_with_position("\r".to_string(), position + 1)
+                };
             }
         }
         context.failure(

@@ -280,3 +280,62 @@ fn line_and_column_of_mixed_line_endings() {
     assert_that!(line_and_column_of(b.clone(), 4), eq((3, 1))); // 'c'
     assert_that!(line_and_column_of(b.clone(), 7), eq((4, 1))); // 'd'
 }
+
+// newline
+
+#[gtest]
+fn newline_matches_lf() {
+    assert_success!(newline(), "\n", &"\n".to_string(), 1);
+}
+
+#[gtest]
+fn newline_matches_crlf() {
+    assert_success!(newline(), "\r\n", &"\r\n".to_string(), 2);
+}
+
+#[gtest]
+fn newline_matches_bare_cr() {
+    assert_success!(newline(), "\r", &"\r".to_string(), 1);
+}
+
+#[gtest]
+fn newline_fails_on_empty_input() {
+    assert_failure!(newline(), "", "newline expected", 0);
+}
+
+#[gtest]
+fn newline_fails_on_non_newline() {
+    assert_failure!(newline(), "\x0c", "newline expected", 0);
+}
+
+// position
+
+#[gtest]
+fn position_at_start_of_empty_input() {
+    let p = seq2(any().star(), position()).map(|(_, pos)| pos);
+    assert_success!(p, "", 0, 0);
+}
+
+#[gtest]
+fn position_after_consuming_one_char() {
+    let p = seq2(any().star(), position()).map(|(_, pos)| pos);
+    assert_success!(p, "a", 1, 1);
+}
+
+#[gtest]
+fn position_after_consuming_two_chars() {
+    let p = seq2(any().star(), position()).map(|(_, pos)| pos);
+    assert_success!(p, "aa", 2, 2);
+}
+
+#[gtest]
+fn position_after_consuming_three_chars() {
+    let p = seq2(any().star(), position()).map(|(_, pos)| pos);
+    assert_success!(p, "aaa", 3, 3);
+}
+
+#[gtest]
+fn position_does_not_consume_input() {
+    let p = seq2(position(), char('a'));
+    assert_success!(p, "a", (0, 'a'), 1);
+}

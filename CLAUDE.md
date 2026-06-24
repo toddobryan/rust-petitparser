@@ -83,10 +83,65 @@ rust-petitparser-macros/src/
 - `PredicateParser.length` is in **chars** (`.chars().count()`), not bytes — required for Unicode/emoji correctness.
 - `AndParser` returns `Parser<T>` — preserves the matched value but resets position to original (lookahead).
 - `NotParser` returns `Parser<Failure>` — inner failure becomes the success value. Error message: `"Expected failure, got success: {:?}"` on the value.
-- `SettableParser` uses `Rc<RefCell<Option<Rc<dyn Parser<T>>>>>` — the "owner" (strong Rc).
+- `SettableParser` uses `Rc<RefCell<Rc<dyn Parser<T>>>>` — the "owner" (strong Rc). No `Option`:
+  `undefined()` seeds the slot with an `UndefinedParser<T>` sentinel (always fails with a
+  configurable message, default `"undefined parser"`) instead of leaving it absent, mirroring
+  dart's `undefined<R>() => failure<R>(message: message).settable()`. This means a forgotten
+  `.set()` call surfaces as an ordinary parse failure (`assert_failure!`-testable, see
+  `combinator_tests.rs`'s `settable_undefined_fails_gracefully_until_set`) instead of the
+  `.expect("SettableParser delegate not set")` panic this used to have.
 - `SettableParserRef` uses `Weak<RefCell<...>>` — the "embedded reference" that breaks Rc cycles.
+  Still panics via `.expect("SettableParser owner dropped")` if the owning `SettableParser` itself
+  was dropped — a different, more severe failure mode (use-after-free-shaped) than "forgot to
+  call `.set()`", deliberately left as a panic since dart's GC-based design has no equivalent
+  concept to compare against.
 - Call `.borrow()` on `SettableParser` to get a `SettableParserRef` for embedding in sub-parsers.
 - Rule: use `.clone()` for forward references (more complex → simpler); use `.borrow()` only for back-references (the one that creates the cycle). The strong chain from the returned root parser keeps all intermediate parsers alive.
+
+## Where `T: Clone` Is Required (flag in release notes)
+
+**Rule of thumb:** a parser needs `T: Clone` exactly when it manufactures a value that
+isn't derived from the input and has to be ready to hand that value out more than once
+across separate `parse_on(&self, ...)` calls (re-parses, retries inside a repetition, reuse
+of the same built grammar). Parsers that only move/transform a value already produced by a
+delegate (`map`, `flat_map`, `seq*`, `choice*`, `star`/`plus`/`rep`, etc.) never need it —
+there's nothing being reproduced, just passed through. This split is deliberate, not an
+accident: we explicitly considered and rejected putting `Clone` on `Parser<T>` or
+`ParserExt<T>` as a blanket bound (would lock out legitimate non-`Clone` value types — e.g.
+an AST node wrapping a `Box<dyn Trait>` — from the entire library, including combinators
+that never clone anything) in favor of keeping it scoped to the specific structs/methods
+that actually need it, mirroring how `ParserExt<T>: Parser<T> + Sized where T: Debug` puts
+its one blanket bound at the extension-trait level but leaves `Clone` to individual structs.
+Current/planned call sites (**this list is exactly what release notes/public docs should
+call out as a gotcha** — a user defining a custom value type only discovers this the moment
+they reach for one of these, so it's worth being upfront about it rather than letting people
+hit the compiler error cold):
+- `success(value: T)` — `SuccessParser<T: Clone + Debug>` (`src/parser/misc/success.rs`).
+- `.to(value)` — `ToParser<T, P, V> where V: Clone + Debug` (`src/parser/action/to.rs`); note
+  it's the *replacement* value type `V` that needs `Clone`, not the delegate's `T`.
+- `.opt_with(value)` / a from-scratch `OptionalParser<T, P>` (dart's `optionalWith` /
+  `OptionalParser`) — needs `T: Clone` for the same reason as `success`. **Not yet fixed as
+  of this writing**: the current `opt_with` body (`self.rep(0, Some(1)).map(move |vec| ...
+  unwrap_or(value))`) doesn't compile for non-`Copy` `T` at all (moves `value` into a `Fn`
+  closure) — needs a per-method `where T: Clone` bound plus `.clone()` inside, or better,
+  rewriting it as a dedicated struct matching dart's actual `OptionalParser` (`delegate` +
+  `otherwise` fields, direct `parse_on`/`fast_parse_on`) instead of composing `.rep()`/`.map()`.
+- `ExpressionGroup::build_optional`/`build` and `ExpressionBuilder::build` (implemented,
+  `src/expression/`) — **transitively and unconditionally** need `T: Clone`, because `build()`'s
+  pipeline always calls `build_optional` as its last step
+  (mirroring dart's `_buildOptional(_buildLeft(...))`, which *also* always calls it)
+  regardless of whether any individual group ever calls `.optional(...)`. This means anyone
+  who calls `ExpressionBuilder::build()` to finish *any* grammar needs `T: Clone`, even if
+  they never use `.optional()` — worth calling out explicitly since it's a non-obvious
+  transitive consequence, not something visible from `ExpressionBuilder`'s own public API
+  surface. Scope the bound to `build`/`build_optional` specifically (not the whole
+  `impl<T: Debug + 'static> ExpressionGroup<T>` block) so the registration methods
+  (`wrapper`/`prefix`/`postfix`/`left`/`right`/`optional`) stay `Clone`-free.
+- Dart's `Parser.copy()` is **not** related to this — it copies the parser *graph* (used by
+  dart's reflection/`replace()`/`resolve()` machinery, e.g. how dart's
+  `ExpressionBuilder.build()` patches `_loopback` references after the fact), not the parsed
+  *value* type. We have no equivalent and don't need one — our `SettableParser`/`.borrow()`
+  weak-ref trick achieves the same recursive-grammar result without any tree-walking/copying.
 
 ## Testing
 - Uses `googletest` crate: `#[gtest]`, `assert_that!`, `eq`, `not`
@@ -98,7 +153,7 @@ rust-petitparser-macros/src/
   `json.rs` + `expr.rs` + `bibtex.rs` + `pascal.rs` (written with the `#[grammar]` proc macro —
   each has genuinely recursive rules) + `tabular.rs` + `uri.rs` (hand-written — no recursion, so
   no macro/`SettableParser` needed)
-- 286 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
+- 365 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
   call (fetches ~9600-entry `scg.bib` from GitHub) on every `cargo test` run, by deliberate choice
   (~3s, judged worth it for the coverage; not `#[ignore]`d). Needs `ureq` (dev-dependency).
 
@@ -125,6 +180,24 @@ rust-petitparser-macros/src/
 - `and()`, `not()` lookaheads
 - `rep_sep`, `star_sep`, `plus_sep` (separated repeaters)
 - `rep_lazy`, `star_lazy`, `plus_lazy` (lazy repeaters with limit parser)
+- `rep_greedy`, `star_greedy`, `plus_greedy` (greedy repeaters: consume as much as possible, then
+  backtrack one element at a time until `limit: impl Parser<()>` succeeds — limit's value type is
+  fixed to `()`, unlike the lazy variants' `impl Parser<L>`, so non-`()` limiters like `digit()`
+  need `.map(|_| ())` first). `GreedyRepeatingParser` (`src/parser/repeater/greedy.rs`). Ported from
+  dart's `GreedyRepeatingParser`, which `LimitedRepeatingParser`s into a min-loop (hard-fails via `?`
+  if it can't even reach `min` — correct, since there's no valid backtrack point below `min`) then a
+  max-loop that grows `elements`/`contexts` (or `count`/`positions` in `fast_parse_on`) in lockstep,
+  followed by a pop-one-and-retry search against `limit` once growth stops. Two bugs fixed during
+  test-porting (both in the original, not introduced while porting): (1) `parse_on`'s max-loop used
+  `self.delegate.parse_on(&current)?`, which propagated the delegate's *normal* termination failure
+  as the overall result instead of breaking out of the greedy-growth loop and falling through to the
+  backtrack search — this made every greedy parser fail outright the moment the input ran out of
+  matching characters (i.e. almost always). Fixed to `match ... { Ok(_) => ..., Err(_) => break }`.
+  (2) `fast_parse_on`'s max-loop called `self.fast_parse_on(...)` (itself, recursively) instead of
+  `self.delegate.fast_parse_on(...)` — would have silently swallowed multiple elements per loop
+  iteration instead of one. Both confirmed fixed by hand-tracing the dart test matrix position-by-
+  position before writing `repeater_tests.rs`'s `star_greedy`/`plus_greedy`/`repeat_greedy` tests,
+  then verifying all assertions passed on the first run.
 - `skip(open, close)` — wraps parser between delimiters, returns inner value
 - `skip_left(before)`, `skip_right(after)`, `end()` — variants of skip
 - `to(value)` — replaces the matched value with a clone of `value` (`V: Clone + Debug`)
@@ -133,8 +206,19 @@ rust-petitparser-macros/src/
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
 - `epsilon()`, `epsilon_with(T)`, `success(T)`, `failure()`, `failure_with_message(String)`
 - `position()` — returns current position as `usize` without consuming
-- `SettableParser<T>` / `SettableParserRef<T>` for recursive grammars (cycle-free)
+- `SettableParser<T>` / `SettableParserRef<T>` for recursive grammars (cycle-free).
+  `SettableParser::undefined()` / `undefined_with_message(String)` — gracefully fails
+  (`"undefined parser"` by default) instead of panicking if used before `.set()` (see Key
+  Design Decisions for the sentinel-parser mechanism).
 - `line_and_column_of`
+- `ExpressionBuilder<T>` / `ExpressionGroup<T>` (`src/expression/`, exported via prelude) —
+  precedence-climbing grammar builder ported from dart-petitparser's `lib/expression.dart`:
+  `primitive()`, `group()`, `wrapper()`, `prefix()`, `postfix()`, `left()`, `right()`,
+  `optional()`, `build()`. Tested by `tests/expression_tests.rs` (49 tests, ported from dart's
+  own `test/expression_test.dart`). See "What's Next" for the bugs found while porting (group()
+  losing registrations, build() leaking a dangling weak ref, build_right's repetition shape,
+  choice_of's failure-joiner) and "Where `T: Clone` Is Required" for the transitive `Clone`
+  bound on `build()`.
 - JSON example grammar (full, with recursive `SettableParser`)
 - Arithmetic expression grammar (`tests/example-grammars/expr.rs`)
   - Integer arithmetic: `+`, `-`, `*`, `/` with correct precedence and left-associativity
@@ -212,9 +296,70 @@ rust-petitparser-macros/src/
       version of dart's fixture rather than a byte-for-byte port — dart's original relies on
       adjacent string-literal concatenation (two `join('\n')` list entries with no comma between
       them) that has no Rust equivalent and wasn't meaningful test content on its own.
-  - **math.dart** (the *examples* version, not our `expr.rs`) uses dart-petitparser's
-    `ExpressionBuilder` (`primitive`/`group`/`wrapper`/`prefix`/`left`/`right` precedence-climbing
-    API) — a real new abstraction, not a one-off translation. Bigger lift than it looks.
+  - **`ExpressionBuilder`/`ExpressionGroup` core feature: done** (`src/expression/{builder,group}.rs`,
+    exported via prelude). dart-petitparser's `ExpressionBuilder` (`primitive`/`group`/`wrapper`/
+    `prefix`/`postfix`/`left`/`right`/`optional` precedence-climbing API) — a real new abstraction,
+    not a one-off translation. Tested via `tests/expression_tests.rs` (49 tests, ported from dart's
+    own core-feature test `test/expression_test.dart` — *not* `dart-petitparser-examples`' simpler
+    `math_test.dart` — since dart's own test has zero dedicated `ExpressionGroup` unit tests and
+    instead exercises every feature, including two wrappers on one group, postfix, and the
+    `optional()` assert-failure case, entirely through the public `ExpressionBuilder` API).
+    `dart-petitparser-examples`' actual **math.dart example itself is still pending** as the next
+    step — porting it should now be small, since the builder/group machinery it needs already
+    exists and is tested. Several real bugs surfaced while writing `expression_tests.rs`'s ~1000
+    lines, found by checking every position/message against the real `dart` SDK (`dart test
+    test/expression_test.dart` and ad hoc scratch scripts) rather than hand-deriving them:
+    1. **`ExpressionBuilder::group()` silently discarded every registered operator.** It returned
+       an owned `ExpressionGroup<T>` cloned into `self.groups` *before* the caller had a chance to
+       call `.prefix()`/`.left()`/etc. on it — so every mutation landed on a throwaway snapshot,
+       and `build()` always folded over empty, no-op groups. Caught with a probe test
+       (`.left('+', ...)` registered, then `"1+2"` parsed as `1.0` instead of `3.0` — the `+` was
+       never recognized at all). Fixed by returning `&mut ExpressionGroup<T>` borrowed from
+       `self.groups.last_mut()` instead. Rode along: `ExpressionBuilder::build` changed from
+       `&mut self` to consuming `self` by value, since that's what let `group()`'s fix work
+       cleanly and also removed the `.clone()`s `build()` previously needed just to move `self
+       .groups`/`self.primitives` out from behind a `&mut self` borrow.
+    2. **`ExpressionBuilder::build()` returned the wrong value, leaking a dangling weak reference.**
+       After `self.loopback.set(parser)`, it returned `parser` directly instead of `self.loopback`.
+       Since `build(self)` consumes the whole builder — including `self.loopback`, the *only*
+       strong `Rc` keeping the shared `RefCell` alive — returning anything other than `loopback`
+       itself meant that `Rc` got dropped the instant `build()` returned. Every `SettableParserRef`
+       embedded in the tree (e.g. inside a `wrapper()`'s recursive sub-parser) instantly became
+       dangling, surfacing as `.expect("SettableParser owner dropped")` panics the moment anything
+       actually recursed (e.g. parsing `"(1 + 2)"` — non-recursive inputs like `"1+2+3"` never hit
+       it, which is why a quick sanity check across a few inputs, not just one, mattered). Fixed by
+       returning `self.loopback` itself (which already delegates to `parser` after `.set()`) —
+       behaviorally identical, but now the caller holds the strong owner for exactly as long as
+       they use the returned parser. Not the same class of bug as the `T: Clone` story elsewhere in
+       this doc — that one is about *value* reproduction; this one is about *parser object*
+       lifetime, a cost specific to choosing `Rc`/`Weak` over dart's GC.
+    3. **`choice_of`'s default failure-joiner didn't match dart's.** Checked dart's source directly:
+       `ChoiceParser`'s default `failureJoiner` is `selectLast` (always the failure of whichever
+       alternative was tried *last*, regardless of how far any other alternative actually got) —
+       confirmed by tracing why dart reports `'('` as failing with `'number expected'` at position
+       0 (not the seemingly-more-obvious position 1, where the paren-wrapper's own recursive
+       attempt actually bottoms out) and verifying against the real dart SDK. Our `choice2`/`choiceN`
+       default to `SELECT_FARTHEST` instead — a deliberate, pre-existing, unrelated choice for the
+       rest of the library, not something to change globally. Fixed narrowly: `group.rs`'s internal
+       `choice_of`/`select_last` helper (used only by `ExpressionBuilder`/`ExpressionGroup` to build
+       dart's `buildChoice`-equivalent) now explicitly overrides each pairwise `choice2` with
+       `joiner: SELECT_SECOND`, which — applied pairwise through the fold — reproduces `selectLast`'s
+       N-ary behavior exactly.
+    4. **`build_right`'s repetition shape didn't match `build_left`'s (or dart's).** `build_left`
+       correctly parses "term, then zero-or-more `(op, term)` pairs" (`seq2(inner, seq2(op,
+       inner).star())`), mirroring dart's `inner.plusSeparated(sep)`. `build_right` instead parsed
+       "zero-or-more `(term, op)` pairs, then one mandatory final term"
+       (`seq2(seq2(inner, op).star(), inner)`) — equivalent for fully-valid input, but with a
+       different backtracking boundary: a *greedy* `.star()` of `(term, op)` pairs has nothing to
+       give back to the mandatory trailing term once it's consumed everything, so a trailing
+       dangling operator (`"1 ^ 2 ^"`) or an exact-multiple-of-pairs input (`"ab"` against
+       `epsilon_with(())`-based right-recursion) caused a hard failure instead of gracefully
+       succeeding with whatever had already matched (dart backtracks the *whole* failed `(sep,
+       inner)` unit, never committing the dangling separator at all). Fixed by restructuring
+       `build_right` to the same "term, then `(op, term)*`" shape as `build_left`, with the fold
+       itself reversed (pop terms/ops from the end in lockstep) instead of the repetition shape.
+       Caught by two test failures (`pow_error`'s `"1 ^ 2 ^"` case and `builder_epsilon_right`),
+       both of which disappeared once the shape was fixed — no other tests regressed.
   - **lisp**, **prolog** — full interpreters (cons cells, environments, native functions), not
     just grammars. Substantial scope beyond parsing.
   - **smalltalk**, **dart** (the grammar, not this project) — large grammars only (200–800+
@@ -229,17 +374,49 @@ rust-petitparser-macros/src/
   Done so far: character/predicate gap-fills, `string_ignore_case`, `context_tests.rs`;
   `lazy > repeat` block in `repeater_tests.rs` (remaining `repeat_lazy` cases, unbounded
   `repeat_lazy`, and the `star_lazy`/`plus_lazy` non-consuming-delegate panic tests, with a
-  shared `panic_message` helper).
-  Remaining portable-now: newline + `position()` tests; combinator (choice joiner matrices,
-  `seq3` failure positions, settable wrap+message, skip none/before/after); possessive
-  `times`/`repeat` unbounded/infinite-loop; richer action `input`/`map`/`token`; representative
-  sequence subset.
-  Deferred (needs new features, scope B/C): greedy repeaters, `SeparatedList` typed results,
-  string repeaters, `opt_with`, graceful `undefined()` failure,
-  `permute`/`pick`/`continuation`/`join`, custom-delimiter `trim`,
+  shared `panic_message` helper); newline + `position()` tests (`misc_tests.rs` — writing the
+  bare-`\r` case here surfaced and fixed a real `NewlineParser::parse_on` panic: it indexed
+  `buffer[position + 1]` to check for `\r\n` without first checking that index was in bounds,
+  so a trailing `\r` with nothing after it crashed instead of matching as a lone `\r`); combinator
+  choice failure-joiner matrix (select-first/select-last/farthest/farthest-joined, positions
+  hand-verified against dart's matrix — message *text* follows our own "expected X, but
+  found/reached Y" convention, not dart's "X expected" suffix style), `seq3` per-position
+  failures, `settable` passthrough, `skip` none/before-only/after-only, `.neg()`
+  (`combinator_tests.rs`); richer `map`/`.input()` (nested composition)/`trim_with`
+  (custom-delimiter)/a full `Token` accessor matrix (value/buffer/start/end/length/line/column/
+  input across mixed `\n`/`\r`/`\r\n` line endings) (`action_tests.rs`); possessive
+  `rep` unbounded (100k-element stress test) and the full `greedy > star/plus/repeat/repeat
+  unbounded/infinite loop` group (`repeater_tests.rs`) — this is what surfaced the two
+  `GreedyRepeatingParser` bugs described above; representative sequence subset beyond `seq3`
+  (extended `seq4_test` with all 4 failure positions, added `seq9_test` to confirm the pattern
+  holds at the macro-generated max arity too) (`combinator_tests.rs`).
+  **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
+  Deferred (needs new features, scope B/C): `SeparatedList` typed results,
+  string repeaters, `opt_with`, `permute`/`pick`/`continuation`/`join`,
   `range`/regex char parsers, reflection/introspection (`children`, `copy`,
   deep-equality — needed for dart's `expectParserInvariants` assertions).
-  (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci` are now implemented.)
+  (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
+  `trim_with`/greedy repeaters/graceful `undefined()` failure are now implemented.)
+- **Fixed: `fast_parse_on` side-effect gap.** `fast_parse_on`'s contract is "compute the resulting
+  position only, no value needed" — `InputParser` already honored this. `MapParser`, `ToParser`,
+  and `TokenParser` did not override it at all, falling back to the default blanket impl (which
+  calls `parse_on` and discards the position) — meaning their closures/cloning/`Token`-building
+  *did* run on the fast path, contrary to what "position-only" implies. Checked dart's actual
+  source (`lib/src/parser/action/{map,where,token}.dart`) before fixing, to confirm which ones
+  are *supposed* to skip: dart's `MapParser.fastParseOn` delegates straight through when
+  `!hasSideEffects` (its default), and `TokenParser.fastParseOn` always delegates straight
+  through — confirming both were genuine gaps here, not deliberate design. Fixed by adding
+  `fast_parse_on` overrides to `map.rs`/`to.rs`/`token.rs` that delegate directly to
+  `self.delegate.fast_parse_on(...)`, skipping the closure/clone/`Token::new` entirely. Verified
+  with closure-call-counting tests (`action_tests.rs`: `map_fast_parse_on_skips_the_mapping_
+  function`, `to_fast_parse_on_skips_cloning_the_replacement_value`,
+  `token_fast_parse_on_skips_building_the_token_and_inner_side_effects` — the last one chains
+  `digit().map(...).token()` to prove the skip composes through both layers).
+  **`OnlyIfParser`/`FlatMapParser` deliberately left unchanged** — confirmed dart's `WhereParser`
+  (= our `only_if`) *also* doesn't override `fastParseOn`, because it can't: the predicate's
+  result determines success/failure, so the value must be computed to know the outcome.
+  `FlatMapParser` has no dart equivalent, but the same reasoning applies even more directly — the
+  second parser is *chosen by* the first value, so there's no position to compute without it.
 - **Deliberately NOT ported:** dart's `cast` / `castList` parsers. Rust has no easy runtime
   cast, and the idiomatic equivalent is for callers to `impl From<T>` and use `.map(Into::into)`
   / `.into()`. Don't add these even for test parity.

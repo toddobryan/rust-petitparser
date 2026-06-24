@@ -1,0 +1,113 @@
+use std::marker::PhantomData;
+use std::{fmt::Debug, rc::Rc};
+
+use crate::core::{
+    context::{Context, HasContext},
+    parser::Parser,
+    result::ParseResult,
+};
+
+#[derive(Clone, Debug)]
+pub struct GreedyRepeatingParser<P, T, PC> {
+    pub delegate: P,
+    pub limit: PC,
+    pub min: usize,
+    pub max: Option<usize>,
+    pub delegate_type: PhantomData<T>,
+}
+
+impl<P, T, PC> Parser<Vec<T>> for GreedyRepeatingParser<P, T, PC>
+where
+    P: Parser<T>,
+    T: Debug,
+    PC: Parser<()>,
+{
+    fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
+        let mut elements: Vec<T> = Vec::new();
+        let mut current = context.clone();
+
+        while elements.len() < self.min {
+            let result = self.delegate.parse_on(&current)?;
+            assert!(
+                current.position() < result.position(),
+                "{:?} must always consume",
+                self.delegate
+            );
+            elements.push(result.value);
+            current = result.context;
+        }
+        let mut contexts = vec![current.clone()];
+        while self.max.is_none() || elements.len() < self.max.unwrap() {
+            match self.delegate.parse_on(&current) {
+                Ok(result) => {
+                    assert!(
+                        current.position() < result.position(),
+                        "{:?} must always consume",
+                        self.delegate,
+                    );
+                    elements.push(result.value);
+                    current = result.context;
+                    contexts.push(current.clone());
+                }
+                Err(_) => break,
+            }
+        }
+        loop {
+            let limiter = self.limit.parse_on(contexts.last().unwrap());
+            match limiter {
+                Ok(_) => return contexts.last().unwrap().success(elements),
+                Err(f) => {
+                    if elements.is_empty() {
+                        return Err(f);
+                    }
+                    contexts.pop();
+                    elements.pop();
+                    if contexts.is_empty() {
+                        return Err(f);
+                    }
+                }
+            }
+        }
+    }
+
+    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+        let mut count = 0;
+        let mut current: usize = position;
+        while count < self.min {
+            let result = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            assert!(current < result, "{:?} must always consume", self.delegate);
+            current = result;
+            count += 1;
+        }
+        let mut positions: Vec<usize> = vec![current];
+        while self.max.is_none() || count < self.max.unwrap() {
+            let result = self.delegate.fast_parse_on(buffer.clone(), current);
+            if result.is_none() {
+                break;
+            }
+            let result = result.unwrap();
+            assert!(current < result, "{:?} must always consume", self.delegate);
+            current = result;
+            positions.push(current);
+            count += 1;
+        }
+        loop {
+            let limiter = self
+                .limit
+                .fast_parse_on(buffer.clone(), *positions.last().unwrap());
+            match limiter {
+                None => {
+                    if count == 0 {
+                        return None;
+                    }
+                    positions.pop();
+                    count -= 1;
+                    if positions.is_empty() {
+                        return None;
+                    }
+                }
+                Some(_) => return positions.pop(),
+            }
+        }
+    }
+}

@@ -16,6 +16,7 @@ use crate::parser::combinator::skip::SkipParser;
 use crate::parser::misc::end::eof;
 use crate::parser::misc::epsilon::epsilon;
 use crate::parser::misc::label::LabeledParser;
+use crate::parser::repeater::greedy::GreedyRepeatingParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use crate::parser::repeater::separated::SeparatedRepeatingParser;
@@ -85,6 +86,21 @@ where
         }
     }
 
+    fn rep_greedy(
+        self,
+        limit: impl Parser<()>,
+        min: usize,
+        max: Option<usize>,
+    ) -> impl Parser<Vec<T>> {
+        GreedyRepeatingParser {
+            delegate: self,
+            limit,
+            min,
+            max,
+            delegate_type: PhantomData,
+        }
+    }
+
     fn times(self, num: usize) -> PossessiveRepeatingParser<Self> {
         self.rep(num, Some(num))
     }
@@ -124,6 +140,16 @@ where
         }
     }
 
+    fn star_greedy(self, limit: impl Parser<()>) -> impl Parser<Vec<T>> {
+        GreedyRepeatingParser {
+            delegate: self,
+            limit,
+            min: 0,
+            max: None,
+            delegate_type: PhantomData,
+        }
+    }
+
     fn plus(self) -> impl Parser<Vec<T>> {
         self.rep(1, None)
     }
@@ -143,8 +169,26 @@ where
         }
     }
 
+    fn plus_greedy(self, limit: impl Parser<()>) -> impl Parser<Vec<T>> {
+        GreedyRepeatingParser {
+            delegate: self,
+            limit,
+            min: 1,
+            max: None,
+            delegate_type: PhantomData,
+        }
+    }
+
     fn opt(self) -> impl Parser<Option<T>> {
         self.rep(0, Some(1)).map(|vec| vec.into_iter().next())
+    }
+
+    fn opt_with(self, value: T) -> impl Parser<T>
+    where
+        T: Clone + 'static,
+    {
+        self.rep(0, Some(1))
+            .map(move |vec| vec.into_iter().next().unwrap_or(value.clone()))
     }
 
     fn token(self) -> TokenParser<Self> {

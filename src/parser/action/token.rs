@@ -2,6 +2,7 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use crate::core::token::Token;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct TokenParser<P> {
@@ -25,5 +26,11 @@ where
                 ),
             }),
         }
+    }
+
+    // Building a Token is pure bookkeeping the fast path never needs — it only needs to know
+    // where the delegate stopped.
+    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+        self.parser.fast_parse_on(buffer, position)
     }
 }

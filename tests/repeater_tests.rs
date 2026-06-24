@@ -3,6 +3,12 @@ use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use std::panic;
 
+// star_greedy/plus_greedy/rep_greedy require `limit: impl Parser<()>`; digit() is
+// `Parser<char>`, so it needs its value erased to be usable as a limiter here.
+fn digit_limit() -> impl Parser<()> {
+    digit().map(|_| ())
+}
+
 #[gtest]
 fn opt_test() {
     let p = char('a').opt();
@@ -240,6 +246,161 @@ fn star_lazy_with_non_consuming_delegate_should_panic() {
 #[gtest]
 fn plus_lazy_with_non_consuming_delegate_should_panic() {
     let p = epsilon().plus_lazy(failure());
+    let orig = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(|| p.parse("")).expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+        .expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    panic::set_hook(orig);
+}
+
+// possessive: unbounded repeat
+
+#[gtest]
+fn possessive_repeat_unbounded() {
+    let p = char('a').rep(2, None);
+    let input = "a".repeat(100_000);
+    assert_success!(p, &input, &vec!['a'; 100_000], 100_000);
+}
+
+// greedy
+
+#[gtest]
+fn star_greedy() {
+    let p = word().star_greedy(digit_limit());
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "a", "expected digit, but found 'a'", 0);
+    assert_failure!(p, "ab", "expected digit, but found 'a'", 0);
+    assert_success!(p, "1", &vec![], 0);
+    assert_success!(p, "a1", &vec!['a'], 1);
+    assert_success!(p, "ab1", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "12", &vec!['1'], 1);
+    assert_success!(p, "a12", &vec!['a', '1'], 2);
+    assert_success!(p, "ab12", &vec!['a', 'b', '1'], 3);
+    assert_success!(p, "abc12", &vec!['a', 'b', 'c', '1'], 4);
+    assert_success!(p, "123", &vec!['1', '2'], 2);
+    assert_success!(p, "a123", &vec!['a', '1', '2'], 3);
+    assert_success!(p, "ab123", &vec!['a', 'b', '1', '2'], 4);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c', '1', '2'], 5);
+}
+
+#[gtest]
+fn plus_greedy() {
+    let p = word().plus_greedy(digit_limit());
+    assert_failure!(
+        p,
+        "",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        0
+    );
+    assert_failure!(p, "a", "expected digit, but reached end of input", 1);
+    assert_failure!(p, "ab", "expected digit, but found 'b'", 1);
+    assert_failure!(p, "1", "expected digit, but reached end of input", 1);
+    assert_success!(p, "a1", &vec!['a'], 1);
+    assert_success!(p, "ab1", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "12", &vec!['1'], 1);
+    assert_success!(p, "a12", &vec!['a', '1'], 2);
+    assert_success!(p, "ab12", &vec!['a', 'b', '1'], 3);
+    assert_success!(p, "abc12", &vec!['a', 'b', 'c', '1'], 4);
+    assert_success!(p, "123", &vec!['1', '2'], 2);
+    assert_success!(p, "a123", &vec!['a', '1', '2'], 3);
+    assert_success!(p, "ab123", &vec!['a', 'b', '1', '2'], 4);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c', '1', '2'], 5);
+}
+
+#[gtest]
+fn repeat_greedy() {
+    let p = word().rep_greedy(digit_limit(), 2, Some(4));
+    assert_failure!(
+        p,
+        "",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        0
+    );
+    assert_failure!(
+        p,
+        "a",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        1
+    );
+    assert_failure!(p, "ab", "expected digit, but reached end of input", 2);
+    assert_failure!(p, "abc", "expected digit, but found 'c'", 2);
+    assert_failure!(p, "abcd", "expected digit, but found 'c'", 2);
+    assert_failure!(p, "abcde", "expected digit, but found 'c'", 2);
+    assert_failure!(
+        p,
+        "1",
+        "expected word character (letter, digit, or '_'), but reached end of input",
+        1
+    );
+    assert_failure!(p, "a1", "expected digit, but reached end of input", 2);
+    assert_success!(p, "ab1", &vec!['a', 'b'], 2);
+    assert_success!(p, "abc1", &vec!['a', 'b', 'c'], 3);
+    assert_success!(p, "abcd1", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde1", "expected digit, but found 'c'", 2);
+    assert_failure!(p, "12", "expected digit, but reached end of input", 2);
+    assert_success!(p, "a12", &vec!['a', '1'], 2);
+    assert_success!(p, "ab12", &vec!['a', 'b', '1'], 3);
+    assert_success!(p, "abc12", &vec!['a', 'b', 'c', '1'], 4);
+    assert_success!(p, "abcd12", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde12", "expected digit, but found 'c'", 2);
+    assert_success!(p, "123", &vec!['1', '2'], 2);
+    assert_success!(p, "a123", &vec!['a', '1', '2'], 3);
+    assert_success!(p, "ab123", &vec!['a', 'b', '1', '2'], 4);
+    assert_success!(p, "abc123", &vec!['a', 'b', 'c', '1'], 4);
+    assert_success!(p, "abcd123", &vec!['a', 'b', 'c', 'd'], 4);
+    assert_failure!(p, "abcde123", "expected digit, but found 'c'", 2);
+}
+
+#[gtest]
+fn repeat_greedy_unbounded() {
+    let p = word().rep_greedy(digit_limit(), 2, None);
+
+    let letters = format!("{}1", "a".repeat(100_000));
+    assert_success!(p, &letters, &vec!['a'; 100_000], 100_000);
+
+    let digits = format!("{}1", "1".repeat(100_000));
+    assert_success!(p, &digits, &vec!['1'; 100_000], 100_000);
+}
+
+#[gtest]
+fn star_greedy_with_non_consuming_delegate_should_panic() {
+    let p = epsilon().star_greedy(failure());
+    let orig = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(|| p.parse("")).expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+        .expect_err("the function did not panic");
+    assert_that!(
+        panic_message(result.as_ref()),
+        eq("EpsilonParser { result: () } must always consume")
+    );
+
+    panic::set_hook(orig);
+}
+
+#[gtest]
+fn plus_greedy_with_non_consuming_delegate_should_panic() {
+    let p = epsilon().plus_greedy(failure());
     let orig = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
 
