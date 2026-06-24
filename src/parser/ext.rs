@@ -2,12 +2,12 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::matcher::matches::MatchesIterable;
+use crate::parser::action::constant::ConstantParser;
 use crate::parser::action::continuation::{Continuation, ContinuationParser};
 use crate::parser::action::flat_map::FlatMapParser;
 use crate::parser::action::input::InputParser;
 use crate::parser::action::map::MapParser;
 use crate::parser::action::only_if::OnlyIfParser;
-use crate::parser::action::to::ToParser;
 use crate::parser::action::token::TokenParser;
 use crate::parser::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
@@ -54,8 +54,8 @@ where
         }
     }
 
-    fn to<V>(self, value: V) -> ToParser<T, Self, V> {
-        ToParser {
+    fn constant<V>(self, value: V) -> ConstantParser<T, Self, V> {
+        ConstantParser {
             delegate: self,
             value,
             delegate_type: PhantomData,

@@ -21,7 +21,7 @@ impl TabularDefinition {
     pub fn csv() -> Self {
         TabularDefinition {
             quote: Rc::new(string("\"")),
-            escape: Rc::new(string("\"\"").to("\"".to_string())),
+            escape: Rc::new(string("\"\"").constant("\"".to_string())),
             delimiter: Rc::new(string(",")),
             newline: Rc::new(newline()),
         }

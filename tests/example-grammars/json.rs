@@ -62,22 +62,22 @@ mod json_grammar {
     }
 
     fn fraction() -> impl Parser<()> {
-        seq2(char('.'), digit().plus()).to(())
+        seq2(char('.'), digit().plus()).constant(())
     }
 
     fn exponent() -> impl Parser<()> {
-        seq3(char_ci('e'), one_of("+-").opt(), digit().plus()).to(())
+        seq3(char_ci('e'), one_of("+-").opt(), digit().plus()).constant(())
     }
 
     fn boolean() -> impl Parser<Json> {
         choice2(
-            string("true").to(Json::Bool(true)),
-            string("false").to(Json::Bool(false)),
+            string("true").constant(Json::Bool(true)),
+            string("false").constant(Json::Bool(false)),
         )
     }
 
     fn null() -> impl Parser<Json> {
-        string("null").to(Json::Null)
+        string("null").constant(Json::Null)
     }
 
     fn json_string() -> impl Parser<Json> {
@@ -101,13 +101,13 @@ mod json_grammar {
 
     fn escape_char() -> impl Parser<char> {
         choice8(
-            char('"').to('"'),
-            char('b').to('\x08'),
-            char('f').to('\x0C'),
-            char('n').to('\n'),
-            char('r').to('\r'),
-            char('t').to('\t'),
-            char('\\').to('\\'),
+            char('"').constant('"'),
+            char('b').constant('\x08'),
+            char('f').constant('\x0C'),
+            char('n').constant('\n'),
+            char('r').constant('\r'),
+            char('t').constant('\t'),
+            char('\\').constant('\\'),
             unicode_escape(),
         )
     }

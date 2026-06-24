@@ -2,6 +2,24 @@
 
 A Rust port of PetitParser (originally Dart/Java).
 
+## Reference Checkout
+The dart-petitparser reference clone at `/home/toddobryan/code/dart/dart-petitparser` is pinned
+to tag `v7.0.2` (detached HEAD at `a8579a0`, the latest released version as of 2026-06-24) — use
+this as the ground truth for parity checks rather than `origin/main` (which has unreleased
+CI/dependency-bump churn beyond the tag). Diffed `v7.0.2` against our previous reference point
+(`807dece`, 7 commits past `v7.0.1`): almost entirely doc-comment-only changes, except one new
+combinator — `.constant(value)` (`lib/src/parser/action/constant.dart`) — which we already had
+under the name `.to(value)`, with the identical shape (clone on the slow path, position-only skip
+on the fast path); renamed ours to `.constant(value)` (`src/parser/action/constant.rs`,
+`ConstantParser`) to match dart exactly. Surfaced one real naming collision while doing the
+rename: Pascal's own grammar has a rule named `constant`, and since `PascalGrammar` implements
+`Parser<T>` (so it picks up the blanket `ParserExt<T>` impl too), Rust's method resolution tries
+the value-receiver trait method (`ParserExt::constant<V>(self, value: V)`) before the `&self`-
+receiver inherent accessor the `#[grammar]` macro generates — same root cause, same fix, as the
+pre-existing `type` → `pascal_type` rename (a Rust keyword collision, not a trait collision, but
+the resolution mechanics that make renaming necessary are the same). Fixed by renaming the rule
+to `pascal_constant` in `tests/example-grammars/pascal.rs`, mirroring `pascal_type`.
+
 ## User Preferences
 - Provide hints and structural guidance, not full code — let the user implement with guidance
 - Give type signatures, key gotchas, and design rationale
@@ -45,7 +63,7 @@ src/
       input.rs    - InputParser (flatten matched chars to String)
       only_if.rs  - OnlyIfParser (predicate gate on success value)
       flat_map.rs - FlatMapParser (monadic bind: value → next parser)
-      to.rs       - ToParser<T,P,V> (.to(value) — replace matched value with a clone, V: Clone)
+      constant.rs - ConstantParser<T,P,V> (.constant(value) — replace matched value with a clone, V: Clone)
     repeater/
       possessive.rs  - PossessiveRepeatingParser { min, max }
       separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
@@ -117,8 +135,9 @@ call out as a gotcha** — a user defining a custom value type only discovers th
 they reach for one of these, so it's worth being upfront about it rather than letting people
 hit the compiler error cold):
 - `success(value: T)` — `SuccessParser<T: Clone + Debug>` (`src/parser/misc/success.rs`).
-- `.to(value)` — `ToParser<T, P, V> where V: Clone + Debug` (`src/parser/action/to.rs`); note
-  it's the *replacement* value type `V` that needs `Clone`, not the delegate's `T`.
+- `.constant(value)` — `ConstantParser<T, P, V> where V: Clone + Debug`
+  (`src/parser/action/constant.rs`); note it's the *replacement* value type `V` that needs
+  `Clone`, not the delegate's `T`.
 - `.opt_with(value)` / a from-scratch `OptionalParser<T, P>` (dart's `optionalWith` /
   `OptionalParser`) — needs `T: Clone` for the same reason as `success`. **Not yet fixed as
   of this writing**: the current `opt_with` body (`self.rep(0, Some(1)).map(move |vec| ...
@@ -200,7 +219,7 @@ hit the compiler error cold):
   then verifying all assertions passed on the first run.
 - `skip(open, close)` — wraps parser between delimiters, returns inner value
 - `skip_left(before)`, `skip_right(after)`, `end()` — variants of skip
-- `to(value)` — replaces the matched value with a clone of `value` (`V: Clone + Debug`)
+- `constant(value)` — replaces the matched value with a clone of `value` (`V: Clone + Debug`)
 - `labeled(label)` — replaces failure message
 - `string(&str)`, `string_ignore_case(&str)` via `PredicateParser`
 - `eof()`, `eof_with_message()` via `EndOfInputParser`
@@ -426,18 +445,18 @@ hit the compiler error cold):
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure are now implemented.)
 - **Fixed: `fast_parse_on` side-effect gap.** `fast_parse_on`'s contract is "compute the resulting
-  position only, no value needed" — `InputParser` already honored this. `MapParser`, `ToParser`,
-  and `TokenParser` did not override it at all, falling back to the default blanket impl (which
+  position only, no value needed" — `InputParser` already honored this. `MapParser`,
+  `ConstantParser`, and `TokenParser` did not override it at all, falling back to the default blanket impl (which
   calls `parse_on` and discards the position) — meaning their closures/cloning/`Token`-building
   *did* run on the fast path, contrary to what "position-only" implies. Checked dart's actual
   source (`lib/src/parser/action/{map,where,token}.dart`) before fixing, to confirm which ones
   are *supposed* to skip: dart's `MapParser.fastParseOn` delegates straight through when
   `!hasSideEffects` (its default), and `TokenParser.fastParseOn` always delegates straight
   through — confirming both were genuine gaps here, not deliberate design. Fixed by adding
-  `fast_parse_on` overrides to `map.rs`/`to.rs`/`token.rs` that delegate directly to
+  `fast_parse_on` overrides to `map.rs`/`constant.rs`/`token.rs` that delegate directly to
   `self.delegate.fast_parse_on(...)`, skipping the closure/clone/`Token::new` entirely. Verified
   with closure-call-counting tests (`action_tests.rs`: `map_fast_parse_on_skips_the_mapping_
-  function`, `to_fast_parse_on_skips_cloning_the_replacement_value`,
+  function`, `constant_fast_parse_on_skips_cloning_the_replacement_value`,
   `token_fast_parse_on_skips_building_the_token_and_inner_side_effects` — the last one chains
   `digit().map(...).token()` to prove the skip composes through both layers).
   **`OnlyIfParser`/`FlatMapParser` deliberately left unchanged** — confirmed dart's `WhereParser`

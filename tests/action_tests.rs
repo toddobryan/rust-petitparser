@@ -55,12 +55,12 @@ impl Clone for CountedClone {
 }
 
 #[gtest]
-fn to_fast_parse_on_skips_cloning_the_replacement_value() {
+fn constant_fast_parse_on_skips_cloning_the_replacement_value() {
     let clones = Rc::new(RefCell::new(0));
     let value = CountedClone {
         clones: clones.clone(),
     };
-    let p = char('a').to(value);
+    let p = char('a').constant(value);
 
     let pos = p.fast_parse_on("a".chars().collect::<Vec<_>>().into(), 0);
     assert_that!(pos, eq(Some(1)));

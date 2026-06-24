@@ -6,13 +6,13 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct ToParser<T, P, V> {
+pub struct ConstantParser<T, P, V> {
     pub delegate: P,
     pub value: V,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<T, P, V> Parser<V> for ToParser<T, P, V>
+impl<T, P, V> Parser<V> for ConstantParser<T, P, V>
 where
     P: Parser<T>,
     T: Debug,

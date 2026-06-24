@@ -201,7 +201,7 @@ mod pascal_grammar {
             expression(),
             token_str("of", spacer()),
             seq3(
-                constant().plus_sep(token_str(",", spacer())),
+                pascal_constant().plus_sep(token_str(",", spacer())),
                 token_str(":", spacer()),
                 statement(),
             )
@@ -263,7 +263,7 @@ mod pascal_grammar {
             seq4(
                 identifier(),
                 token_str("=", spacer()),
-                constant(),
+                pascal_constant(),
                 token_str(";", spacer()),
             )
             .map(|_| ())
@@ -555,7 +555,7 @@ mod pascal_grammar {
         )
     }
 
-    pub fn constant() -> impl Parser<()> {
+    pub fn pascal_constant() -> impl Parser<()> {
         choice2(
             seq2(
                 one_of("+-"),
@@ -574,7 +574,12 @@ mod pascal_grammar {
                 token_str(")", spacer()),
             )
             .map(|_| ()),
-            seq3(constant(), token_str("..", spacer()), constant()).map(|_| ()),
+            seq3(
+                pascal_constant(),
+                token_str("..", spacer()),
+                pascal_constant(),
+            )
+            .map(|_| ()),
             identifier().map(|_| ()),
         )
     }
@@ -604,7 +609,7 @@ mod pascal_grammar {
             identifier(),
             token_str("of", spacer()),
             seq5(
-                constant().plus_sep(token_str(",", spacer())),
+                pascal_constant().plus_sep(token_str(",", spacer())),
                 token_str(":", spacer()),
                 token_str("(", spacer()),
                 field_list(),
@@ -994,7 +999,7 @@ fn unsigned_integer_production() {
 #[gtest]
 fn constant_production() {
     let g = PascalGrammar::new();
-    let p = g.constant().end();
+    let p = g.pascal_constant().end();
     assert_success!(p, "a", ());
     assert_success!(p, "+b", ());
     assert_success!(p, "-c", ());
