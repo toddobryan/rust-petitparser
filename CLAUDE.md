@@ -153,7 +153,7 @@ hit the compiler error cold):
   `json.rs` + `expr.rs` + `bibtex.rs` + `pascal.rs` (written with the `#[grammar]` proc macro —
   each has genuinely recursive rules) + `tabular.rs` + `uri.rs` (hand-written — no recursion, so
   no macro/`SettableParser` needed)
-- 365 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
+- 376 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
   call (fetches ~9600-entry `scg.bib` from GitHub) on every `cargo test` run, by deliberate choice
   (~3s, judged worth it for the coverage; not `#[ignore]`d). Needs `ureq` (dev-dependency).
 
@@ -304,9 +304,37 @@ hit the compiler error cold):
     `math_test.dart` — since dart's own test has zero dedicated `ExpressionGroup` unit tests and
     instead exercises every feature, including two wrappers on one group, postfix, and the
     `optional()` assert-failure case, entirely through the public `ExpressionBuilder` API).
-    `dart-petitparser-examples`' actual **math.dart example itself is still pending** as the next
-    step — porting it should now be small, since the builder/group machinery it needs already
-    exists and is tested. Several real bugs surfaced while writing `expression_tests.rs`'s ~1000
+    `dart-petitparser-examples`' actual **math.dart example: done**
+    (`tests/example-grammars/math.rs`) — confirmed small once the builder/group machinery
+    existed: AST (`Expr::{Value,Variable,Application}`), `common.dart`'s constant/function
+    tables, and the `ExpressionBuilder<Expr>` wiring, plus all 11 portable `math_test.dart`
+    groups (skipped `linter`, no reflection-based linter equivalent). Notable adaptations:
+    - `Application`'s third field is a plain `fn(&[f64]) -> f64` rather than dart's
+      `Function`/`Function.apply(function, args)` dynamic dispatch — Rust has no runtime-variadic
+      apply, and `create_binding`'s switch on `arguments.length` only ever produces 1- or 2-arg
+      applications anyway, so a slice-taking function pointer covers every case dart's `functions1`/
+      `functions2` maps do, without needing separate 1-arg/2-arg closure types.
+    - Added an actual `Display for Expr` (`Value{v}`/`Variable{name}`/`Application{name}`,
+      mirroring dart's three `toString()` overrides) instead of leaving `Application`'s `name`
+      field unused — dart's test calls `ast.toString()` after every `verify()` (a trivial
+      "doesn't throw" check, since dart's `toString()` can't return null); ported as
+      `result.value.to_string().is_empty()` being false inside the shared `verify_with` helper,
+      which both exercises `Display` on every case and gives the otherwise clippy-flagged-dead
+      `name` field a real reason to exist.
+    - Dart's `verify(input, result, {variables = const {}})` named/defaulted parameter became two
+      functions instead of one — `verify(input, expected)` (the common no-variables case) and
+      `verify_with(input, expected, &HashMap<String, f64>)` — since Rust has no default arguments.
+    - Dart's `expect(() => verify('x', double.nan, variables: {}), throwsArgumentError)` (evaluating
+      an unbound variable throws) is its own `#[should_panic(expected = "Unknown variable: x")]`
+      test (`variable_unknown_panics`) rather than folded into `variable()`'s other (non-panicking)
+      assertions — `#[should_panic]` applies to the whole test function, so a mixed-outcome test
+      can't be expressed in one `#[gtest]` fn the way dart's single `test('variable', ...)` block
+      can mix a normal call and an `expect(() => ..., throwsArgumentError)` closure.
+    - One clippy false-positive: `verify("3.141", 3.141)` (a literal decimal-parsing test, ported
+      verbatim from dart) trips `clippy::approx_constant` purely because `3.141` is lexically close
+      to `PI` — scoped `#[allow(clippy::approx_constant)]` on `number()` rather than changing the
+      test value, since the literal is intentionally arbitrary, not a botched constant.
+    Several real bugs surfaced while writing `expression_tests.rs`'s ~1000
     lines, found by checking every position/message against the real `dart` SDK (`dart test
     test/expression_test.dart` and ad hoc scratch scripts) rather than hand-deriving them:
     1. **`ExpressionBuilder::group()` silently discarded every registered operator.** It returned
