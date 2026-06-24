@@ -437,6 +437,57 @@ fn reversed_range_matches_nothing() {
     assert_failure!(p, "c", "expected [c-a], but found 'c'", 0);
 }
 
+// range
+
+#[gtest]
+fn range_default() {
+    let p = rust_petitparser::prelude::range('e', 'o');
+    for c in ['e', 'i', 'o'] {
+        assert_success!(p, c.to_string().as_str(), c, 1);
+    }
+    for c in ['p', 'd', '9'] {
+        assert_failure!(
+            p,
+            c.to_string().as_str(),
+            format!("expected [e-o], but found '{}'", c).as_str(),
+            0
+        );
+    }
+}
+
+#[gtest]
+fn range_message() {
+    let p = rust_petitparser::prelude::range('x', 'z').with_message("variable expected");
+    for c in ['x', 'y', 'z'] {
+        assert_success!(p, c.to_string().as_str(), c, 1);
+    }
+    for c in ['p', 'd', '9'] {
+        assert_failure!(p, c.to_string().as_str(), "variable expected", 0);
+    }
+}
+
+#[gtest]
+fn range_unicode() {
+    let p = rust_petitparser::prelude::range('😁', '😄');
+    for c in ['😁', '😃', '😄'] {
+        assert_success!(p, c.to_string().as_str(), c, 1);
+    }
+    for c in ['😀', '😅', '9'] {
+        assert_failure!(
+            p,
+            c.to_string().as_str(),
+            format!("expected [😁-😄], but found '{}'", c).as_str(),
+            0,
+        );
+    }
+}
+
+#[gtest]
+#[should_panic(expected = "In range, start must be <= end")]
+fn invalid_range() {
+    let _ = rust_petitparser::prelude::range('o', 'e');
+}
+
 // whitespace
 
 #[gtest]

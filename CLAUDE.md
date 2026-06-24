@@ -93,6 +93,15 @@ rust-petitparser-macros/src/
 ## Key Design Decisions
 - `Parser<T>` is generic over `T` (not an associated type). This means impls where `T` only appears in the `where` clause (not the Self type or trait) require `PhantomData<T>` in the struct — see `MapParser`.
 - `ParserExt<T>: Parser<T> + Sized where T: Debug` extension trait provides method syntax. Blanket impl covers all parsers.
+- `accept(input: &str)`/`accept_at(input: &str, start)` take `&str` and build the `Rc<[char]>` buffer
+  internally, matching both dart's actual signature and this crate's own `Parser::parse(&str)`
+  convenience wrapper — these are one-shot leaf calls, never invoked elsewhere in the codebase with a
+  pre-existing buffer, so there's no reuse to preserve. `all_matches` deliberately stayed on
+  `Rc<[char]>` instead of getting the same treatment: `core/token.rs`'s `line_and_column_of` calls it
+  internally on a buffer it already holds (the original parse buffer, shared via `Rc`), and forcing
+  `&str` there would mean collecting that buffer into a `String` just to re-split it back into an
+  `Rc<[char]>` inside `all_matches` — a wasteful, lossy round trip purely to satisfy the signature.
+  Same combinator, two different call patterns, two different right answers.
 - Blanket `impl<T, P: Parser<T> + ?Sized> Parser<T> for Rc<P>` (in `core/parser.rs`) — lets `Rc<P>` and `Rc<dyn Parser<T>>` be used as parsers (delegates `parse_on`/`fast_parse_on`). Needed to share a sub-parser across multiple combinators via `Rc::new(..).clone()` (our parsers aren't generally `Clone`). `Rc<P>` is `Sized`, so it auto-gets `ParserExt` too.
 - `choice_impl!` macro uses `Option<Failure>` accumulation pattern (avoids needing to separate "first" from "rest").
 - `impl_seq!` macro uses `?` operator with sequential context threading.
@@ -178,7 +187,15 @@ hit the compiler error cold):
 
 ## What's Implemented
 - Character parsers: `any`, `char`, `char_ci`, `letter`, `digit`, `digit_with_radix`, `one_of`, `one_of_ci`,
-  `none_of`, `none_of_ci`, `lowercase`, `uppercase`, `whitespace`, `word`, `predicate`
+  `none_of`, `none_of_ci`, `lowercase`, `uppercase`, `whitespace`, `word`, `predicate`, `range(start, end)`
+  (validates `start <= end` at construction time — same as dart's `RangeCharPredicate` constructor —
+  not at match time, both for parity and so the invalid-range case is a plain panic-on-construction
+  test rather than needing an actual parse attempt to trigger). `any_of`/`any_of_ci`
+  exist too, as deliberate thin aliases for `one_of`/`one_of_ci` (`src/parser/character.rs`) — dart's actual
+  name has always been `anyOf`/`noneOf` (never `oneOf`), but the project keeps `one_of` as the primary name
+  since "any of" reads as "one-or-more", which isn't what this parser does (it matches exactly one
+  character from the set). The alias exists purely so programmers coming from dart can find the function
+  under the name they already know.
 - `pattern(&str)`, `pattern_ci(&str)` — char-class primitive (e.g. `pattern("a-zA-Z0-9_-")`, `^` negates).
   `CharKind::{Pattern,PatternCi,NegatedPattern,NegatedPatternCi}` each hold `Vec<RangeInclusive<char>>`
   (negation is a separate variant, not a bool field — mirrors the existing `OneOf`/`NoneOf` split).
@@ -438,12 +455,13 @@ hit the compiler error cold):
   (extended `seq4_test` with all 4 failure positions, added `seq9_test` to confirm the pattern
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
-  Deferred (needs new features, scope B/C): `SeparatedList` typed results,
-  string repeaters, `opt_with`, `permute`/`pick`/`continuation`/`join`,
-  `range`/regex char parsers, reflection/introspection (`children`, `copy`,
-  deep-equality — needed for dart's `expectParserInvariants` assertions).
+  Deferred (needs new features, scope B/C): `SeparatedList` typed results, string repeaters,
+  `Token::join`, regex char parsers, reflection/introspection
+  (`children`, `copy`, deep-equality — needed for dart's `expectParserInvariants` assertions).
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
-  `trim_with`/greedy repeaters/graceful `undefined()` failure are now implemented.)
+  `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
+  (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
+  alias)/`pick` are now implemented.)
 - **Fixed: `fast_parse_on` side-effect gap.** `fast_parse_on`'s contract is "compute the resulting
   position only, no value needed" — `InputParser` already honored this. `MapParser`,
   `ConstantParser`, and `TokenParser` did not override it at all, falling back to the default blanket impl (which

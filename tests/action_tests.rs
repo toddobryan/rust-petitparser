@@ -40,6 +40,42 @@ fn map_fast_parse_on_skips_the_mapping_function() {
     assert_that!(*calls.borrow(), eq(1));
 }
 
+#[gtest]
+fn elements_at_parser() {
+    let p = seq2(digit(), letter())
+        .map(|(one, two)| vec![one, two])
+        .elements_at(vec![-1, 0]);
+    assert_success!(p, "1a", &vec!['a', '1'], 2);
+    assert_success!(p, "2b", &vec!['b', '2'], 2);
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "1", "expected letter, but reached end of input", 1);
+    assert_failure!(p, "12", "expected letter, but found '2'", 1);
+}
+
+#[gtest]
+fn pick_from_start() {
+    let p = seq2(digit(), letter())
+        .map(|(one, two)| vec![one, two])
+        .pick(1);
+    assert_success!(p, "1a", 'a', 2);
+    assert_success!(p, "2b", 'b', 2);
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "1", "expected letter, but reached end of input", 1);
+    assert_failure!(p, "12", "expected letter, but found '2'", 1);
+}
+
+#[gtest]
+fn pick_from_end() {
+    let p = seq2(digit(), letter())
+        .map(|(one, two)| vec![one, two])
+        .pick(-1);
+    assert_success!(p, "1a", 'a', 2);
+    assert_success!(p, "2b", 'b', 2);
+    assert_failure!(p, "", "expected digit, but reached end of input", 0);
+    assert_failure!(p, "1", "expected letter, but reached end of input", 1);
+    assert_failure!(p, "12", "expected letter, but found '2'", 1);
+}
+
 #[derive(Debug)]
 struct CountedClone {
     clones: Rc<RefCell<usize>>,

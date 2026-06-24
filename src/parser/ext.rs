@@ -4,10 +4,12 @@ use crate::core::result::{Failure, ParseResult, Success};
 use crate::matcher::matches::MatchesIterable;
 use crate::parser::action::constant::ConstantParser;
 use crate::parser::action::continuation::{Continuation, ContinuationParser};
+use crate::parser::action::elements_at::ElementsAtParser;
 use crate::parser::action::flat_map::FlatMapParser;
 use crate::parser::action::input::InputParser;
 use crate::parser::action::map::MapParser;
 use crate::parser::action::only_if::OnlyIfParser;
+use crate::parser::action::pick::PickParser;
 use crate::parser::action::token::TokenParser;
 use crate::parser::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
@@ -44,6 +46,15 @@ where
             overlapping,
             parser_type: PhantomData,
         }
+    }
+
+    fn accept_at(&self, input: &str, start: usize) -> bool {
+        let buffer: Rc<[char]> = input.chars().collect::<Vec<_>>().into();
+        self.fast_parse_on(buffer, start).is_some()
+    }
+
+    fn accept(&self, input: &str) -> bool {
+        self.accept_at(input, 0_usize)
     }
 
     fn map<U, F: Fn(T) -> U>(self, f: F) -> MapParser<T, Self, F> {
@@ -347,6 +358,41 @@ where
             delegate_type: PhantomData,
             result_type: PhantomData,
         }
+    }
+
+    fn pick<E>(self, index: i32) -> PickParser<Self, T, E>
+    where
+        T: IntoIterator<Item = E>,
+        E: Clone + Debug,
+    {
+        PickParser {
+            delegate: self,
+            index,
+            delegate_type: PhantomData,
+            iterator_type: PhantomData,
+        }
+    }
+
+    fn elements_at<E>(self, indexes: Vec<i32>) -> ElementsAtParser<Self, T, E>
+    where
+        T: IntoIterator<Item = E>,
+        E: Clone + Debug,
+    {
+        ElementsAtParser {
+            delegate: self,
+            indexes,
+            delegate_type: PhantomData,
+            iterator_type: PhantomData,
+        }
+    }
+
+    /// alias for elements_at to match Dart usage
+    fn permute<E>(self, indexes: Vec<i32>) -> ElementsAtParser<Self, T, E>
+    where
+        T: IntoIterator<Item = E>,
+        E: Clone + Debug,
+    {
+        self.elements_at(indexes)
     }
 }
 

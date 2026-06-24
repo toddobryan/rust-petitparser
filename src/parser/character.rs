@@ -20,6 +20,7 @@ pub enum CharKind {
     PatternCi(Vec<RangeInclusive<char>>),
     NegatedPattern(Vec<RangeInclusive<char>>),
     NegatedPatternCi(Vec<RangeInclusive<char>>),
+    Range(char, char),
     Lowercase,
     Uppercase,
     Whitespace,
@@ -55,6 +56,7 @@ impl CharKind {
             NegatedPatternCi(ranges) => !ranges.iter().any(|r| {
                 r.contains(&c.to_ascii_lowercase()) || r.contains(&c.to_ascii_uppercase())
             }),
+            Range(start, end) => *start <= c && c <= *end,
             Lowercase => c.is_lowercase(),
             Uppercase => c.is_uppercase(),
             Whitespace => c.is_whitespace(),
@@ -80,6 +82,7 @@ impl CharKind {
             OneOfCi(chars) => format!("any of {:?} (case-insensitive)", chars),
             NoneOf(chars) => format!("none of {:?}", chars),
             NoneOfCi(chars) => format!("none of {:?} (case-insensitive)", chars),
+            Range(start, end) => format!("[{}-{}]", start, end),
             Lowercase => "lowercase letter".to_string(),
             Uppercase => "uppercase letter".to_string(),
             Pattern(ranges) => ranges_to_string(ranges, false, false),
@@ -259,6 +262,16 @@ pub fn one_of_ci(chars: &str) -> CharParser {
     }
 }
 
+/// Alias for [`one_of`], matching dart-petitparser's name for programmers coming from there.
+pub fn any_of(chars: &str) -> CharParser {
+    one_of(chars)
+}
+
+/// Alias for [`one_of_ci`], matching dart-petitparser's name for programmers coming from there.
+pub fn any_of_ci(chars: &str) -> CharParser {
+    one_of_ci(chars)
+}
+
 pub fn none_of(chars: &str) -> CharParser {
     CharParser {
         kind: CharKind::NoneOf(chars.chars().collect()),
@@ -269,6 +282,14 @@ pub fn none_of(chars: &str) -> CharParser {
 pub fn none_of_ci(chars: &str) -> CharParser {
     CharParser {
         kind: CharKind::NoneOfCi(chars.chars().collect()),
+        message: None,
+    }
+}
+
+pub fn range(start: char, end_inclusive: char) -> CharParser {
+    assert!(start <= end_inclusive, "In range, start must be <= end");
+    CharParser {
+        kind: CharKind::Range(start, end_inclusive),
         message: None,
     }
 }

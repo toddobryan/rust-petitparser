@@ -1,0 +1,45 @@
+use std::marker::PhantomData;
+use std::{fmt::Debug, rc::Rc};
+
+use crate::core::{
+    context::Context,
+    parser::Parser,
+    result::{ParseResult, Success},
+};
+
+#[derive(Clone, Debug)]
+pub struct ElementsAtParser<P, I, T> {
+    pub delegate: P,
+    pub indexes: Vec<i32>,
+    pub iterator_type: PhantomData<I>,
+    pub delegate_type: PhantomData<T>,
+}
+
+impl<P, I, T> Parser<Vec<T>> for ElementsAtParser<P, I, T>
+where
+    P: Parser<I>,
+    I: Debug + IntoIterator<Item = T>,
+    T: Clone + Debug,
+{
+    fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
+        let success: Success<I> = self.delegate.parse_on(context)?;
+        let values: Vec<T> = success.value.into_iter().collect();
+        let mut return_values: Vec<T> = Vec::new();
+        for index in self.indexes.iter() {
+            let norm_index: usize = if *index < 0 {
+                (values.len() as i32 + *index) as usize
+            } else {
+                *index as usize
+            };
+            return_values.push(values[norm_index].clone());
+        }
+        Ok(Success {
+            context: success.context,
+            value: return_values,
+        })
+    }
+
+    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+        self.delegate.fast_parse_on(buffer, position)
+    }
+}
