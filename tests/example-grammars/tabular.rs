@@ -30,7 +30,7 @@ impl TabularDefinition {
     pub fn tsv() -> Self {
         TabularDefinition {
             quote: Rc::new(failure().map(|_| String::new())),
-            escape: Rc::new(seq2(char('\\'), any()).map(|(_, value)| match value {
+            escape: Rc::new(seq2(char('\\'), any()).map2(|_, value| match value {
                 't' => "\t".to_string(),
                 'n' => "\n".to_string(),
                 'r' => "\r".to_string(),

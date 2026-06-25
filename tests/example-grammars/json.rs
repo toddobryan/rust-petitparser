@@ -41,8 +41,7 @@ mod json_grammar {
     }
 
     fn member() -> impl Parser<(String, Json)> {
-        seq3(raw_string().trim(), char(':'), json_value().trim())
-            .map(|(key, _, value)| (key, value))
+        seq3(raw_string().trim(), char(':'), json_value().trim()).map3(|key, _, value| (key, value))
     }
 
     fn num() -> impl Parser<Json> {

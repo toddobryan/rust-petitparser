@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::core::parser::Parser;
 use crate::parser::combinator::choice::{Choice2, SELECT_SECOND, choice2};
 use crate::parser::combinator::sequence::{seq2, seq3};
-use crate::parser::ext::ParserExt;
+use crate::parser::ext::{MapTuple2, ParserExt};
 
 #[derive(Clone, Debug)]
 pub struct ExpressionGroup<T> {
@@ -188,7 +188,7 @@ fn build_prefix<T: Debug + 'static>(
         inner
     } else {
         Rc::new(
-            seq2(choice_of(prefix.clone()).star(), inner).map(|(prefix, value)| {
+            seq2(choice_of(prefix.clone()).star(), inner).map2(|prefix, value| {
                 prefix
                     .into_iter()
                     .rev()
@@ -207,7 +207,7 @@ fn build_postfix<T: Debug + 'static>(
     } else {
         Rc::new(
             seq2(inner, choice_of(postfix.clone()).star())
-                .map(|(value, postfix)| postfix.into_iter().fold(value, |acc, op| op.call(&acc))),
+                .map2(|value, postfix| postfix.into_iter().fold(value, |acc, op| op.call(&acc))),
         )
     }
 }
@@ -224,7 +224,7 @@ fn build_right<T: Debug + 'static>(
                 inner.clone(),
                 seq2(choice_of(right.clone()), inner.clone()).star(),
             )
-            .map(|(first, rest)| {
+            .map2(|first, rest| {
                 // `rest` is `[(op1, t1), (op2, t2), ...]`; right-fold means
                 // `first op1 (t1 op2 (t2 ...))`, so walk the terms/ops from the end.
                 let mut terms = vec![first];
@@ -255,7 +255,7 @@ fn build_left<T: Debug + 'static>(
                 inner.clone(),
                 seq2(choice_of(left.clone()), inner.clone()).star(),
             )
-            .map(|(first, rest)| {
+            .map2(|first, rest| {
                 rest.into_iter()
                     .fold(first, |acc, (op, term)| op.call(&acc, &term))
             }),

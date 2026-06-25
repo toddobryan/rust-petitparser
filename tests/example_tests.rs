@@ -29,7 +29,7 @@ impl TestVals {
                 whitespace().plus().input(),
                 choice3(identifier.clone(), number.clone(), quoted.clone()),
             )
-            .map(|(_, _, val)| val),
+            .map3(|_, _, val| val),
         );
         let javadoc = Rc::new(seq3(string("/**"), string("*/").neg().star(), string("*/")).input());
         let multiline = Rc::new(
@@ -40,7 +40,7 @@ impl TestVals {
                     .input(),
                 string("\"\"\""),
             )
-            .map(|(_, val, _)| val),
+            .map3(|_, val, _| val),
         );
         Self {
             identifier,

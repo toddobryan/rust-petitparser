@@ -127,10 +127,10 @@ pub fn math_parser() -> impl Parser<Expr> {
                 recursive.star_sep(char(',').trim(), Trailing::Disallowed),
                 char(')').trim(),
             )
-            .map(|(_, args, _)| args)
+            .map3(|_, args, _| args)
             .opt_with(Vec::new()),
         )
-        .map(|(name, args)| create_binding(name, args)),
+        .map2(create_binding),
     );
 
     builder

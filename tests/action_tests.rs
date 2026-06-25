@@ -43,7 +43,7 @@ fn map_fast_parse_on_skips_the_mapping_function() {
 #[gtest]
 fn elements_at_parser() {
     let p = seq2(digit(), letter())
-        .map(|(one, two)| vec![one, two])
+        .map2(|one, two| vec![one, two])
         .elements_at(vec![-1, 0]);
     assert_success!(p, "1a", &vec!['a', '1'], 2);
     assert_success!(p, "2b", &vec!['b', '2'], 2);
@@ -55,7 +55,7 @@ fn elements_at_parser() {
 #[gtest]
 fn pick_from_start() {
     let p = seq2(digit(), letter())
-        .map(|(one, two)| vec![one, two])
+        .map2(|one, two| vec![one, two])
         .pick(1);
     assert_success!(p, "1a", 'a', 2);
     assert_success!(p, "2b", 'b', 2);
@@ -67,7 +67,7 @@ fn pick_from_start() {
 #[gtest]
 fn pick_from_end() {
     let p = seq2(digit(), letter())
-        .map(|(one, two)| vec![one, two])
+        .map2(|one, two| vec![one, two])
         .pick(-1);
     assert_success!(p, "1a", 'a', 2);
     assert_success!(p, "2b", 'b', 2);
@@ -139,7 +139,7 @@ fn token_line_and_column() {
         seq2(char('a'), char('b')),
         seq2(char('\n'), char('c').plus().token()),
     )
-    .map(|((_, _), (_, t))| t);
+    .map2(|(_, _), (_, t)| t);
     let success = p.parse("ab\nccd").unwrap();
     assert_that!(success.value.line(), eq(2));
     assert_that!(success.value.column(), eq(1));

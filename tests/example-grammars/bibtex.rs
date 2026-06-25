@@ -41,7 +41,7 @@ mod bibtex_grammar {
             fields(),
             char('}').trim(),
         )
-        .map(|(kind, _, key, _, fields, _)| BibTeXEntry { kind, key, fields })
+        .map6(|kind, _, key, _, fields, _| BibTeXEntry { kind, key, fields })
     }
 
     fn fields() -> impl Parser<Vec<(String, String)>> {
@@ -50,7 +50,7 @@ mod bibtex_grammar {
 
     fn field() -> impl Parser<(String, String)> {
         seq3(field_name().trim(), char('=').trim(), field_value())
-            .map(|(name, _, value)| (name, value))
+            .map3(|name, _, value| (name, value))
     }
 
     fn field_value() -> impl Parser<String> {

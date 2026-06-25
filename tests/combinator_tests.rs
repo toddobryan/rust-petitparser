@@ -100,7 +100,7 @@ fn choice3_test() {
 #[gtest]
 fn nested_parens_settable_test() {
     let mut expr = SettableParser::<i32>::undefined();
-    let inner = seq3(char('('), expr.clone(), char(')')).map(|(_, n, _)| n + 1);
+    let inner = seq3(char('('), expr.clone(), char(')')).map3(|_, n, _| n + 1);
     let leaf = char('x').map(|_| 0);
     expr.set(choice2(inner, leaf));
 
@@ -123,7 +123,7 @@ fn and_fails_when_inner_fails() {
 
 #[gtest]
 fn and_as_lookahead_in_sequence() {
-    let p = seq2(char('a'), char('b').and()).map(|(l, _)| l);
+    let p = seq2(char('a'), char('b').and()).map2(|l, _| l);
     assert_success!(p, "ab", 'a', 1);
 }
 
@@ -146,7 +146,7 @@ fn not_fails_when_inner_succeeds() {
 
 #[gtest]
 fn not_succeeds_without_advancing() {
-    let p = seq2(char('z').not(), letter().star()).map(|(_, ls)| ls);
+    let p = seq2(char('z').not(), letter().star()).map2(|_, ls| ls);
     assert_success!(p, "abc", &vec!['a', 'b', 'c'], 3);
     assert_success!(p, "yz", &vec!['y', 'z'], 2);
     assert_failure!(p, "zyx", "success not expected", 0);
@@ -158,7 +158,7 @@ fn not_with_message() {
         char('z').not_with_message("expected any character but 'z'".to_string()),
         letter().star(),
     )
-    .map(|(_, ls)| ls);
+    .map2(|_, ls| ls);
     assert_success!(p, "abc", &vec!['a', 'b', 'c'], 3);
     assert_success!(p, "yz", &vec!['y', 'z'], 2);
     assert_failure!(p, "zyx", "expected any character but 'z'", 0);

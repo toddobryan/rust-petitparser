@@ -32,7 +32,7 @@ pub fn uri() -> impl Parser<UriParts> {
         seq2(char('?'), query_span()).opt(),
         seq2(char('#'), fragment_span()).opt(),
     )
-    .map(|(scheme, authority, path, query, fragment)| {
+    .map5(|scheme, authority, path, query, fragment| {
         let scheme = scheme.map(|(s, _)| s);
         let authority_str = authority.map(|(_, a)| a);
         let auth = parse_authority(authority_str.as_deref().unwrap_or(""));
@@ -97,7 +97,7 @@ pub fn parse_authority(input: &str) -> Authority {
 }
 
 fn credentials() -> impl Parser<(String, Option<(char, String)>)> {
-    seq3(username(), seq2(char(':'), password()).opt(), char('@')).map(|(u, p, _)| (u, p))
+    seq3(username(), seq2(char(':'), password()).opt(), char('@')).map3(|u, p, _| (u, p))
 }
 
 fn username() -> impl Parser<String> {
@@ -142,7 +142,7 @@ pub fn parse_query(input: &str) -> Vec<(String, Option<String>)> {
 
 fn param() -> impl Parser<(String, Option<String>)> {
     seq2(param_key(), seq2(char('='), param_value()).opt())
-        .map(|(key, value)| (key, value.map(|(_, v)| v)))
+        .map2(|key, value| (key, value.map(|(_, v)| v)))
 }
 
 fn param_key() -> impl Parser<String> {

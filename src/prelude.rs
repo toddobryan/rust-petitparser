@@ -9,7 +9,10 @@ pub use crate::parser::character::*;
 pub use crate::parser::combinator::choice::*;
 pub use crate::parser::combinator::sequence::*;
 pub use crate::parser::combinator::settable::{SettableParser, SettableParserRef};
-pub use crate::parser::ext::{CharacterRepeatingParserExt, ParserExt};
+pub use crate::parser::ext::{
+    CharacterRepeatingParserExt, MapTuple2, MapTuple3, MapTuple4, MapTuple5, MapTuple6, MapTuple7,
+    MapTuple8, MapTuple9, ParserExt,
+};
 pub use crate::parser::misc::end::*;
 pub use crate::parser::misc::epsilon::*;
 pub use crate::parser::misc::failure::*;

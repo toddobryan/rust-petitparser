@@ -412,6 +412,30 @@ hit the compiler error cold):
     type arguments into the string via `$runtimeType` (e.g. `"SeparatedList<String,
     String>(...)"`) — no clean Rust equivalent, so the ported test checks our actual
     `"SeparatedList(...)"` format (sans type arguments) instead of dart's substring-only check.
+- **`map2`..`map9`** (`src/parser/ext.rs`, `impl_map_tuple!` macro, mirroring `impl_seq!`'s
+  per-arity-invocation pattern) — lets a `seqN(...)` result's tuple be mapped with an N-ary
+  closure (`seq3(a, b, c).map3(|x, y, z| ...)`) instead of having to destructure a tuple pattern
+  inside a single-argument `.map(|(x, y, z)| ...)`. Each is a trait (`MapTuple2`..`MapTuple9`)
+  blanket-implemented over *any* `Parser<(T1, ..., Tn)>`, not just literal `SeqN` results, so it
+  also works after e.g. `seq3(...).trim()`. Each method just delegates to the existing `.map()`:
+  `self.map(move |(t1, ..., tn)| f(t1, ..., tn))`. Two gotchas hit while writing the macro itself:
+  (1) the first draft used one metavariable (`$value`) for both the type parameter name (`T1`)
+  and the closure's pattern-binding name, since macro substitution is purely textual — this
+  compiled, but every generated method's tuple-destructuring closure ended up with parameters
+  literally named `T1`/`T2`/etc., tripping `non_snake_case` warnings across every call site. Fixed
+  by splitting into two metavariables per slot (`$value` for the type, `$field` for the lowercase
+  binding), exactly mirroring `impl_seq!`'s own `($parser, $value, $field)` triples. (2) the
+  blanket impl needs to restate the `where $value: Debug` bound that appears on the trait
+  declaration — calling `.map()` internally requires `ParserExt<T>: ... where T: Debug`, and
+  tuples are `Debug` automatically once every element is, but only if that bound is repeated on
+  the `impl` block too, matching `ParserExt`'s own existing blanket impl
+  (`impl<T, P: Parser<T>> ParserExt<T> for P where T: Debug {}`) rather than just the trait line.
+  Existing `.map(|(...)| ...)` call sites across the codebase were swept and converted to the
+  matching `mapN` where the receiver was a genuine `Parser<(...)>` (every `seqN(...)` result, plus
+  a couple of `seq2(...).trim()`/nested-`seq2`-of-`seq2` cases) — deliberately *not* converted:
+  several spots in `tests/example-grammars/uri.rs` that look identical syntactically
+  (`.map(|(a, b)| ...)`) but are actually `Option::map`/`Option::and_then` on an already-`.opt()`'d
+  value, which `mapN`'s blanket impl (scoped to `Parser<(...)>`) doesn't cover.
 
 ## What's Next
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
@@ -612,9 +636,9 @@ hit the compiler error cold):
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
   alias)/`pick`/`Token::join`/string repeaters (`star_string`/`plus_string`/`times_string`/
   `rep_string`)/`SeparatedList<T, Sep>` typed results with a `Trailing` flag (`rep_with_sep`/
-  `star_with_sep`/`plus_with_sep`/`times_with_sep`, see "What's Implemented") are now implemented.
-  `SeparatedList`'s own utility methods (`sequential`/`fold_left`/`fold_right`/`Display`, dart's
-  `sequential`/`foldLeft`/`foldRight`/`toString`) are not — still deferred. `Token::join` is a notable example of why
+  `star_with_sep`/`plus_with_sep`/`times_with_sep`)/`SeparatedList`'s own utility methods
+  (`sequential`/`fold`/`rfold`/`Display`, dart's `sequential`/`foldLeft`/`foldRight`/`toString`,
+  see "What's Implemented") are now implemented. `Token::join` is a notable example of why
   `T: Clone`/`Debug` bounds belong on the *method* that needs them, not the surrounding
   `impl<T> Token<T>` block — consuming the input iterator by value to build the result `Vec<T>`
   means `join` doesn't actually need `T: Clone` at all, and an earlier draft that collected into
@@ -648,7 +672,26 @@ hit the compiler error cold):
   fixed-arity `Seq2..9` / `Choice2..9` (e.g. `seq!(a,b,c)` → `seq3(a,b,c)`). Keeps the current
   tuple-typed return (`seq3` → `(A,B,C)`); the macro is just sugar over `impl_seq!`/`choice_impl!`.
   Gotcha: still capped at arity 9 until more `SeqN`/`ChoiceN` are generated (or a nested fallback
-  is added); decide what happens at 10+ args.
+  is added); decide what happens at 10+ args. `map2`..`map9` (see "What's Implemented") is done as
+  the prerequisite groundwork for this — without it, `seq!(...)`'s ergonomic win would be undercut
+  by still having to write `.map(|(a,b,c)| ...)` afterward. Design discussed for `seq!` itself:
+  let it optionally take a trailing closure (`seq!(a, b, c, |x, y, z| ...)`) and fuse the seq+map
+  into one expansion (`seq3(a, b, c).map3(|x, y, z| ...)`) — the macro already knows the arity from
+  counting the parser arguments, so it can forward that same count to pick `mapN` with zero extra
+  counting logic, and a closure-arity mismatch becomes an ordinary Rust type error, not something
+  the macro needs to detect itself. `seq!(a, b, c)` with no trailing closure should still expand to
+  plain `seq3(a, b, c)`, so chaining something between the seq and the map (e.g. `.trim()`) still
+  works via the named `seqN`/`mapN` methods directly — the fused form is sugar for the common case
+  of mapping immediately, not a replacement for the separate methods. For `choice!`, the
+  type-unification gotcha to flag for users: Rust requires every choice alternative to produce the
+  same `T`, unlike dart's dynamically-typed `toChoiceParser()`. We hit this twice during the
+  example-grammar ports — `bibtex.rs`'s `field_string_within_braces` (three alternatives erased to
+  `Parser<()>` via `.map(|_| ())` since only the consumed span mattered, recovered later via
+  `.input_with_message(...)`) and `pascal.rs`'s whole grammar (typed `Parser<()>` everywhere from
+  the start, since it's a pure recognizer with no AST, so the 11-way `statement()` choice never
+  even hit a type mismatch). Neither case needed actual heterogeneous *values* preserved; if a
+  future caller does, the fix is a small sum-type enum with each arm `.map()`-ed into the matching
+  variant, not anything `choice!` itself needs to solve.
 
 ## `#[grammar]` Proc Macro (implemented)
 

@@ -265,7 +265,7 @@ where
         Aft: Debug,
         Bef: Debug,
     {
-        seq3(before, self, after).map(|(_, val, _)| val)
+        seq3(before, self, after).map3(|_, val, _| val)
     }
 
     fn and(self) -> impl Parser<T> {
@@ -465,3 +465,87 @@ pub trait CharacterRepeatingParserExt: Parser<char> + Sized {
 }
 
 impl<P: Parser<char>> CharacterRepeatingParserExt for P {}
+
+macro_rules! impl_map_tuple {
+    ($trait_name:ident, $method:ident, $(($value:ident, $field:ident)),+ $(,)?) => {
+        pub trait $trait_name<$($value),+>: Parser<($($value,)+)> + Sized
+        where
+            $($value: Debug,)+
+        {
+            fn $method<U>(self, f: impl Fn($($value),+) -> U) -> impl Parser<U> {
+                self.map(move |($($field,)+)| f($($field),+))
+            }
+        }
+
+        impl<$($value),+, P: Parser<($($value,)+)>> $trait_name<$($value),+> for P
+        where
+            $($value: Debug,)+
+        {}
+    };
+}
+
+impl_map_tuple!(MapTuple2, map2, (T1, t1), (T2, t2));
+
+impl_map_tuple!(MapTuple3, map3, (T1, t1), (T2, t2), (T3, t3));
+
+impl_map_tuple!(MapTuple4, map4, (T1, t1), (T2, t2), (T3, t3), (T4, t4));
+
+impl_map_tuple!(
+    MapTuple5,
+    map5,
+    (T1, t1),
+    (T2, t2),
+    (T3, t3),
+    (T4, t4),
+    (T5, t5)
+);
+
+impl_map_tuple!(
+    MapTuple6,
+    map6,
+    (T1, t1),
+    (T2, t2),
+    (T3, t3),
+    (T4, t4),
+    (T5, t5),
+    (T6, t6)
+);
+
+impl_map_tuple!(
+    MapTuple7,
+    map7,
+    (T1, t1),
+    (T2, t2),
+    (T3, t3),
+    (T4, t4),
+    (T5, t5),
+    (T6, t6),
+    (T7, t7)
+);
+
+impl_map_tuple!(
+    MapTuple8,
+    map8,
+    (T1, t1),
+    (T2, t2),
+    (T3, t3),
+    (T4, t4),
+    (T5, t5),
+    (T6, t6),
+    (T7, t7),
+    (T8, t8)
+);
+
+impl_map_tuple!(
+    MapTuple9,
+    map9,
+    (T1, t1),
+    (T2, t2),
+    (T3, t3),
+    (T4, t4),
+    (T5, t5),
+    (T6, t6),
+    (T7, t7),
+    (T8, t8),
+    (T9, t9)
+);
