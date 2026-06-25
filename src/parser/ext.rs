@@ -21,7 +21,7 @@ use crate::parser::misc::label::LabeledParser;
 use crate::parser::repeater::greedy::GreedyRepeatingParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
-use crate::parser::repeater::separated::SeparatedRepeatingParser;
+use crate::parser::repeater::separated::{SeparatedList, SeparatedListRepeatingParser, Trailing};
 use crate::prelude::any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -112,32 +112,72 @@ where
         }
     }
 
-    fn times(self, num: usize) -> PossessiveRepeatingParser<Self> {
-        self.rep(num, Some(num))
-    }
-
     fn rep_sep<S: Debug>(
         self,
         sep: impl Parser<S>,
         min: usize,
         max: Option<usize>,
+        trailing: Trailing,
     ) -> impl Parser<Vec<T>> {
-        SeparatedRepeatingParser {
+        self.rep_with_sep(sep, min, max, trailing)
+            .map(|sl| sl.elements)
+    }
+
+    fn rep_with_sep<S: Debug>(
+        self,
+        sep: impl Parser<S>,
+        min: usize,
+        max: Option<usize>,
+        trailing: Trailing,
+    ) -> impl Parser<SeparatedList<T, S>> {
+        SeparatedListRepeatingParser {
             delegate: self,
             separator: sep,
             min,
             max,
+            trailing,
             delegate_type: PhantomData,
             separator_type: PhantomData,
         }
+    }
+
+    fn times(self, num: usize) -> PossessiveRepeatingParser<Self> {
+        self.rep(num, Some(num))
+    }
+
+    fn times_sep<S: Debug>(
+        self,
+        count: usize,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<Vec<T>> {
+        self.times_with_sep(count, sep, trailing)
+            .map(|sl| sl.elements)
+    }
+
+    fn times_with_sep<S: Debug>(
+        self,
+        count: usize,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<SeparatedList<T, S>> {
+        self.rep_with_sep(sep, count, Some(count), trailing)
     }
 
     fn star(self) -> impl Parser<Vec<T>> {
         self.rep(0, None)
     }
 
-    fn star_sep<S: Debug>(self, sep: impl Parser<S>) -> impl Parser<Vec<T>> {
-        self.rep_sep(sep, 0, None)
+    fn star_sep<S: Debug>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+        self.rep_sep(sep, 0, None, trailing)
+    }
+
+    fn star_with_sep<S: Debug>(
+        self,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<SeparatedList<T, S>> {
+        self.rep_with_sep(sep, 0, None, trailing)
     }
 
     fn star_lazy<L: Debug>(self, limit: impl Parser<L>) -> impl Parser<Vec<T>> {
@@ -165,8 +205,16 @@ where
         self.rep(1, None)
     }
 
-    fn plus_sep<S: Debug>(self, sep: impl Parser<S>) -> impl Parser<Vec<T>> {
-        self.rep_sep(sep, 1, None)
+    fn plus_sep<S: Debug>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+        self.rep_sep(sep, 1, None, trailing)
+    }
+
+    fn plus_with_sep<S: Debug>(
+        self,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<SeparatedList<T, S>> {
+        self.rep_with_sep(sep, 1, None, trailing)
     }
 
     fn plus_lazy<S: Debug>(self, limit: impl Parser<S>) -> impl Parser<Vec<T>> {
@@ -397,3 +445,23 @@ where
 }
 
 impl<T, P: Parser<T>> ParserExt<T> for P where T: Debug {}
+
+pub trait CharacterRepeatingParserExt: Parser<char> + Sized {
+    fn rep_string(self, min: usize, max: Option<usize>) -> impl Parser<String> {
+        self.rep(min, max).input()
+    }
+
+    fn star_string(self) -> impl Parser<String> {
+        self.rep_string(0, None)
+    }
+
+    fn plus_string(self) -> impl Parser<String> {
+        self.rep_string(1, None)
+    }
+
+    fn times_string(self, count: usize) -> impl Parser<String> {
+        self.rep_string(count, Some(count))
+    }
+}
+
+impl<P: Parser<char>> CharacterRepeatingParserExt for P {}

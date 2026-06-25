@@ -28,14 +28,14 @@ mod json_grammar {
 
     fn object() -> impl Parser<Json> {
         member()
-            .star_sep(char(',').trim())
+            .star_sep(char(',').trim(), Trailing::Disallowed)
             .skip(char('{').trim(), char('}').trim())
             .map(Json::Object)
     }
 
     fn array() -> impl Parser<Json> {
         json_value()
-            .star_sep(char(',').trim())
+            .star_sep(char(',').trim(), Trailing::Disallowed)
             .skip(char('[').trim(), char(']').trim())
             .map(Json::Array)
     }

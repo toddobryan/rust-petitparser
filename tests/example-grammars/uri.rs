@@ -126,12 +126,14 @@ fn port() -> impl Parser<(char, String)> {
 }
 
 pub fn query() -> impl Parser<Vec<(String, Option<String>)>> {
-    param().plus_sep(char('&')).map(|params| {
-        params
-            .into_iter()
-            .filter(|(key, value)| !key.is_empty() || value.is_some())
-            .collect()
-    })
+    param()
+        .plus_sep(char('&'), Trailing::Disallowed)
+        .map(|params| {
+            params
+                .into_iter()
+                .filter(|(key, value)| !key.is_empty() || value.is_some())
+                .collect()
+        })
 }
 
 pub fn parse_query(input: &str) -> Vec<(String, Option<String>)> {

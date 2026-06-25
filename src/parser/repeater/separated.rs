@@ -5,22 +5,40 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+/// whether in a list of the form elem sep elem sep elem ...
+/// the final element must, can, or cannot be followed by a separator
+#[derive(Clone, Debug, PartialEq)]
+pub enum Trailing {
+    Disallowed,
+    Allowed,
+    Required,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SeparatedList<T, Sep> {
+    pub elements: Vec<T>,
+    pub separators: Vec<Sep>,
+}
+
 #[derive(Clone, Debug)]
-pub struct SeparatedRepeatingParser<P, T, S, Sep> {
+pub struct SeparatedListRepeatingParser<P, T, S, Sep> {
     pub delegate: P,
     pub separator: S,
     pub min: usize,
     pub max: Option<usize>,
+    pub trailing: Trailing,
     pub delegate_type: PhantomData<T>,
     pub separator_type: PhantomData<Sep>,
 }
 
-impl<P, T: Debug, S, Sep: Debug> Parser<Vec<T>> for SeparatedRepeatingParser<P, T, S, Sep>
+impl<P, T, S, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<P, T, S, Sep>
 where
     P: Parser<T>,
     S: Parser<Sep>,
+    T: Debug,
+    Sep: Debug,
 {
-    fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
+    fn parse_on(&self, context: &Context) -> ParseResult<SeparatedList<T, Sep>> {
         let mut elements: Vec<T> = vec![];
         let mut separators: Vec<Sep> = vec![];
         let mut current: Context = context.clone();
@@ -50,11 +68,25 @@ where
             match result {
                 Err(_) => {
                     if !elements.is_empty() {
-                        separators.pop();
-                        return Ok(Success {
-                            context: previous.clone(),
-                            value: elements,
-                        });
+                        return match self.trailing {
+                            Trailing::Disallowed => {
+                                separators.pop();
+                                Ok(Success {
+                                    context: previous.clone(),
+                                    value: SeparatedList {
+                                        elements,
+                                        separators,
+                                    },
+                                })
+                            }
+                            Trailing::Allowed | Trailing::Required => Ok(Success {
+                                context: current.clone(),
+                                value: SeparatedList {
+                                    elements,
+                                    separators,
+                                },
+                            }),
+                        };
                     }
                     break;
                 }
@@ -64,9 +96,28 @@ where
                 }
             }
         }
+        match self.trailing {
+            Trailing::Allowed | Trailing::Required => {
+                if !elements.is_empty() {
+                    let trailing_separator: ParseResult<Sep> = self.separator.parse_on(&current);
+                    match trailing_separator {
+                        Ok(success) => {
+                            separators.push(success.value);
+                            current = success.context.clone();
+                        },
+                        Err(_) if self.trailing == Trailing::Allowed => (),
+                        Err(failure) /*Trailing::Required*/ => return Err(failure),
+                    }
+                }
+            }
+            Trailing::Disallowed => (),
+        }
         Ok(Success {
             context: current.clone(),
-            value: elements,
+            value: SeparatedList {
+                elements,
+                separators,
+            },
         })
     }
 
@@ -93,12 +144,33 @@ where
             }
             let result = self.delegate.fast_parse_on(buffer.clone(), current);
             match result {
-                None => return Some(previous),
+                None => {
+                    return Some(match self.trailing {
+                        Trailing::Disallowed => previous,
+                        Trailing::Allowed | Trailing::Required => current,
+                    });
+                }
                 Some(pos) => {
                     count += 1;
                     current = pos;
                 }
             }
+        }
+        match self.trailing {
+            Trailing::Allowed | Trailing::Required => {
+                if count > 0 {
+                    let trailing_separator: Option<usize> =
+                        self.separator.fast_parse_on(buffer.clone(), current);
+                    match trailing_separator {
+                        Some(new_position) => {
+                            current = new_position;
+                        },
+                        None if self.trailing == Trailing::Allowed => (),
+                        None /*Trailing::Required*/ => return None,
+                    }
+                }
+            }
+            Trailing::Disallowed => (),
         }
         Some(current)
     }

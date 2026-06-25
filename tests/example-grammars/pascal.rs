@@ -87,7 +87,7 @@ mod pascal_grammar {
             identifier(),
             seq3(
                 token_str("(", spacer()),
-                identifier().plus_sep(token_str(",", spacer())),
+                identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
             )
             .opt(),
@@ -133,7 +133,7 @@ mod pascal_grammar {
             identifier(),
             seq3(
                 token_str("(", spacer()),
-                expression().plus_sep(token_str(",", spacer())),
+                expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
             )
             .opt(),
@@ -144,7 +144,7 @@ mod pascal_grammar {
     pub fn statement_block() -> impl Parser<()> {
         seq3(
             token_str("begin", spacer()),
-            statement().plus_sep(token_str(";", spacer())),
+            statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
         .map(|_| ())
@@ -164,7 +164,7 @@ mod pascal_grammar {
     pub fn statement_repeat() -> impl Parser<()> {
         seq4(
             token_str("repeat", spacer()),
-            statement().plus_sep(token_str(";", spacer())),
+            statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("until", spacer()),
             expression(),
         )
@@ -201,12 +201,12 @@ mod pascal_grammar {
             expression(),
             token_str("of", spacer()),
             seq3(
-                pascal_constant().plus_sep(token_str(",", spacer())),
+                pascal_constant().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 statement(),
             )
             .map(|_| ())
-            .plus_sep(token_str(";", spacer())),
+            .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
         .map(|_| ())
@@ -215,7 +215,7 @@ mod pascal_grammar {
     pub fn statement_with() -> impl Parser<()> {
         seq4(
             token_str("with", spacer()),
-            variable().plus_sep(token_str(",", spacer())),
+            variable().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str("do", spacer()),
             statement(),
         )
@@ -251,7 +251,7 @@ mod pascal_grammar {
     pub fn block_label() -> impl Parser<()> {
         seq3(
             token_str("label", spacer()),
-            unsigned_integer().plus_sep(token_str(",", spacer())),
+            unsigned_integer().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str(";", spacer()),
         )
         .map(|_| ())
@@ -291,7 +291,7 @@ mod pascal_grammar {
         seq2(
             token_str("var", spacer()),
             seq4(
-                identifier().plus_sep(token_str(",", spacer())),
+                identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 pascal_type(),
                 token_str(";", spacer()),
@@ -331,7 +331,7 @@ mod pascal_grammar {
     pub fn block_statement() -> impl Parser<()> {
         seq3(
             token_str("begin", spacer()),
-            statement().plus_sep(token_str(";", spacer())),
+            statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
         .map(|_| ())
@@ -367,7 +367,7 @@ mod pascal_grammar {
         seq6(
             token_str("array", spacer()),
             token_str("[", spacer()),
-            simple_type().plus_sep(token_str(",", spacer())),
+            simple_type().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str("]", spacer()),
             token_str("of", spacer()),
             pascal_type(),
@@ -409,7 +409,7 @@ mod pascal_grammar {
             choice3(
                 seq3(
                     token_str("[", spacer()),
-                    expression().plus_sep(token_str(",", spacer())),
+                    expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                     token_str("]", spacer()),
                 )
                 .map(|_| ()),
@@ -465,7 +465,7 @@ mod pascal_grammar {
     pub fn simple_expression() -> impl Parser<()> {
         seq2(
             choice2(token_str("+", spacer()), token_str("-", spacer())).opt(),
-            term().plus_sep(token_str("or", spacer())),
+            term().plus_sep(token_str("or", spacer()), Trailing::Disallowed),
         )
         .plus()
         .map(|_| ())
@@ -473,13 +473,16 @@ mod pascal_grammar {
 
     pub fn term() -> impl Parser<()> {
         factor()
-            .plus_sep(choice5(
-                token_str("*", spacer()),
-                token_str("/", spacer()),
-                token_str("div", spacer()),
-                token_str("mod", spacer()),
-                token_str("and", spacer()),
-            ))
+            .plus_sep(
+                choice5(
+                    token_str("*", spacer()),
+                    token_str("/", spacer()),
+                    token_str("div", spacer()),
+                    token_str("mod", spacer()),
+                    token_str("and", spacer()),
+                ),
+                Trailing::Disallowed,
+            )
             .map(|_| ())
     }
 
@@ -499,7 +502,7 @@ mod pascal_grammar {
                     seq2(token_str("..", spacer()), expression()).opt(),
                 )
                 .map(|_| ())
-                .star_sep(token_str(",", spacer())),
+                .star_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str("]", spacer()),
             )
             .map(|_| ()),
@@ -507,7 +510,7 @@ mod pascal_grammar {
                 identifier(),
                 seq3(
                     token_str("(", spacer()),
-                    expression().plus_sep(token_str(",", spacer())),
+                    expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                     token_str(")", spacer()),
                 )
                 .opt(),
@@ -532,12 +535,12 @@ mod pascal_grammar {
             token_str("(", spacer()),
             seq4(
                 token_str("var", spacer()).opt(),
-                identifier().plus_sep(token_str(",", spacer())),
+                identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 identifier(),
             )
             .map(|_| ())
-            .plus_sep(token_str(";", spacer())),
+            .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str(")", spacer()),
         )
         .map(|_| ())
@@ -570,7 +573,7 @@ mod pascal_grammar {
         choice3(
             seq3(
                 token_str("(", spacer()),
-                identifier().plus_sep(token_str(",", spacer())),
+                identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
             )
             .map(|_| ()),
@@ -593,12 +596,12 @@ mod pascal_grammar {
 
     pub fn field_list_base() -> impl Parser<()> {
         seq3(
-            identifier().plus_sep(token_str(",", spacer())),
+            identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str(":", spacer()),
             pascal_type(),
         )
         .map(|_| ())
-        .plus_sep(token_str(";", spacer()))
+        .plus_sep(token_str(";", spacer()), Trailing::Disallowed)
         .map(|_| ())
     }
 
@@ -609,14 +612,14 @@ mod pascal_grammar {
             identifier(),
             token_str("of", spacer()),
             seq5(
-                pascal_constant().plus_sep(token_str(",", spacer())),
+                pascal_constant().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 token_str("(", spacer()),
                 field_list(),
                 token_str(")", spacer()),
             )
             .map(|_| ())
-            .plus_sep(token_str(";", spacer())),
+            .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
         )
         .map(|_| ())
     }

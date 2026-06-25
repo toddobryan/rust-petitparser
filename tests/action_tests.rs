@@ -297,7 +297,11 @@ fn input_with_message_test() {
 fn input_nested() {
     // .input() composes: an inner flattened span can feed a separated-repeat whose
     // own match is flattened again.
-    let p = digit().star().input().plus_sep(char(',')).input();
+    let p = digit()
+        .star()
+        .input()
+        .plus_sep(char(','), Trailing::Disallowed)
+        .input();
     assert_success!(p, "1", "1", 1);
     assert_success!(p, "1,12", "1,12", 4);
     assert_success!(p, "1,12,123", "1,12,123", 8);

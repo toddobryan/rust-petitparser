@@ -1,3 +1,4 @@
+pub(crate) mod character;
 pub(crate) mod greedy;
 pub(crate) mod lazy;
 pub(crate) mod possessive;

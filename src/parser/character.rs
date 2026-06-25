@@ -1,6 +1,7 @@
 use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
+use crate::parser::repeater::character::CharacterRepeatingParser;
 use std::fmt::Debug;
 use std::range::RangeInclusive;
 use std::rc::Rc;
@@ -28,7 +29,7 @@ pub enum CharKind {
 }
 
 impl CharKind {
-    fn matches(&self, c: char) -> bool {
+    pub fn matches(&self, c: char) -> bool {
         use CharKind::*;
         match self {
             Any => true,
@@ -149,6 +150,29 @@ impl CharParser {
             ..self
         }
     }
+
+    pub fn rep_string(self, min: usize, max: Option<usize>) -> impl Parser<String> {
+        let kind = self.kind.clone();
+        CharacterRepeatingParser {
+            test: Rc::new(move |c: char| kind.matches(c)),
+            description: self.kind.default_description(),
+            message: self.message,
+            min,
+            max,
+        }
+    }
+
+    pub fn star_string(self) -> impl Parser<String> {
+        self.rep_string(0, None)
+    }
+
+    pub fn plus_string(self) -> impl Parser<String> {
+        self.rep_string(1, None)
+    }
+
+    pub fn times_string(self, count: usize) -> impl Parser<String> {
+        self.rep_string(count, Some(count))
+    }
 }
 
 impl Parser<char> for CharParser {
@@ -182,6 +206,28 @@ impl PredicateCharParser {
             Some(c) => format!("expected {}, but found '{}'", self.description, c),
             None => format!("expected {}, but reached end of input", self.description),
         }
+    }
+
+    pub fn rep_string(self, min: usize, max: Option<usize>) -> impl Parser<String> {
+        CharacterRepeatingParser {
+            test: self.test,
+            description: self.description,
+            message: self.message,
+            min,
+            max,
+        }
+    }
+
+    pub fn star_string(self) -> impl Parser<String> {
+        self.rep_string(0, None)
+    }
+
+    pub fn plus_string(self) -> impl Parser<String> {
+        self.rep_string(1, None)
+    }
+
+    pub fn times_string(self, count: usize) -> impl Parser<String> {
+        self.rep_string(count, Some(count))
     }
 }
 

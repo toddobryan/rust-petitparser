@@ -124,7 +124,7 @@ pub fn math_parser() -> impl Parser<Expr> {
                 .trim(),
             seq3(
                 char('(').trim(),
-                recursive.star_sep(char(',').trim()),
+                recursive.star_sep(char(',').trim(), Trailing::Disallowed),
                 char(')').trim(),
             )
             .map(|(_, args, _)| args)

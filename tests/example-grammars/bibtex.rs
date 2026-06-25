@@ -29,7 +29,7 @@ mod bibtex_grammar {
     }
 
     fn entries() -> impl Parser<Vec<BibTeXEntry>> {
-        entry().star_sep(whitespace().star())
+        entry().star_sep(whitespace().star(), Trailing::Disallowed)
     }
 
     fn entry() -> impl Parser<BibTeXEntry> {
@@ -45,7 +45,7 @@ mod bibtex_grammar {
     }
 
     fn fields() -> impl Parser<Vec<(String, String)>> {
-        field().star_sep(char(',').trim())
+        field().star_sep(char(',').trim(), Trailing::Disallowed)
     }
 
     fn field() -> impl Parser<(String, String)> {

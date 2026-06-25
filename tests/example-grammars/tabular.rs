@@ -46,11 +46,13 @@ impl TabularDefinition {
     }
 
     fn lines(&self) -> impl Parser<Vec<Vec<String>>> {
-        self.records().star_sep(self.newline.clone())
+        self.records()
+            .star_sep(self.newline.clone(), Trailing::Disallowed)
     }
 
     fn records(&self) -> impl Parser<Vec<String>> {
-        self.field().star_sep(self.delimiter.clone())
+        self.field()
+            .star_sep(self.delimiter.clone(), Trailing::Disallowed)
     }
 
     fn field(&self) -> impl Parser<String> {

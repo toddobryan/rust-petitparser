@@ -263,6 +263,117 @@ hit the compiler error cold):
   - Note: `SkipParser` does NOT need `T: Clone` — removed that bound
 - `#[grammar]` proc macro (`rust-petitparser-macros`) — replaces manual SettableParser
   boilerplate; drives both the expr and JSON example grammars
+- `star_string()`/`plus_string()`/`times_string(n)`/`rep_string(min, max)` — character
+  repeaters that flatten directly to `String` (dart's `starString`/`plusString`/`timesString`/
+  `repeatString`, `lib/src/parser/repeater/character.dart`). Two-tier design, mirroring how dart
+  special-cases `SingleCharacterParser`/`PredicateCharacterParser` via `is`-checks for a fast
+  path while falling back to a generic `flatten(repeat(...))` otherwise:
+  - **Fast path**: `CharacterRepeatingParser` (`src/parser/repeater/character.rs`) — holds
+    `test: Rc<dyn Fn(char) -> bool>` (not `CharKind`, so the one struct can serve both
+    `CharParser` and `PredicateCharParser` — `CharParser`'s override wraps `kind.matches` in a
+    closure, `PredicateCharParser`'s passes `self.test` straight through) plus `description:
+    String` + `message: Option<String>` and its own `message_for`, computed at failure time from
+    whatever character (or lack thereof) is at the position the scan actually stopped at —
+    structurally identical to `CharParser`'s/`PredicateCharParser`'s own `message_for`, and a
+    deliberate departure from dart's flat, unframed `"X expected"` messages here, same as
+    everywhere else in this port. Needs a manual `Debug` impl (closure field isn't `Debug`),
+    modeled on `PredicateCharParser`'s existing one.
+  - **Generic fallback**: `CharacterRepeatingParserExt: Parser<char> + Sized` trait
+    (`src/parser/ext.rs`), blanket-implemented for every `Parser<char>`, with `rep_string`
+    defaulting to `self.rep(min, max).input()`. Exported via `prelude.rs`.
+  - **The dispatch mechanism**: `CharParser`/`PredicateCharParser` each get plain *inherent*
+    methods of the same four names (in their own `impl CharParser { ... }`/`impl
+    PredicateCharParser { ... }` blocks) that construct `CharacterRepeatingParser` directly —
+    *not* a trait impl. Inherent methods win over trait methods at the same receiver kind (both
+    take `self` by value here), so `char('a').star_string()` resolves to the fast path while
+    `char('a').map(|c| c).star_string()` (anything without its own inherent override) falls
+    through to the trait default. This is the zero-runtime-cost alternative to dart's `self is
+    SingleCharacterParser` runtime check — no `Any`/`downcast_ref` needed.
+  - **Bug found while wiring this up**: fixing an `impl CharacterRepeatingParserExt for CharParser
+    { }` collision (conflicted with the blanket impl below — that block needed to be deleted
+    entirely in favor of inherent methods, not fixed in place) also deleted the blanket impl
+    itself (`impl<P: Parser<char>> CharacterRepeatingParserExt for P {}`) by mistake. Symptom was
+    *not* an error at the deletion site — the crate kept building cleanly, since nothing called
+    `star_string`/etc. yet. It only surfaced once a test tried to exercise the fallback path on a
+    type with no inherent override (`char('a').map(|c| c).plus_string()`), with a misleading
+    `E0599: method not found` pointing at `MapParser`. Chased as a `MapParser`/`Rc<dyn
+    Parser<char>>`-specific trait-resolution puzzle for a while (built minimal repros to compare
+    `ParserExt<T>`'s working blanket impl against this one) before noticing the blanket impl
+    itself was simply gone from `ext.rs`. Lesson: when a generic/blanket-impl-backed method
+    suddenly "isn't found" for an unrelated type, check that the blanket impl itself still exists
+    before assuming a deeper trait-resolution issue.
+  - Tested in `tests/repeater_tests.rs`'s `string` group (ported from dart's
+    `parser_repeater_test.dart`'s `string` group) — `star_string_test`, `plus_string_test`,
+    `times_string_test`, `rep_string_test`, `rep_string_unbounded_test` (100k-char stress test,
+    matching the existing `rep` unbounded stress test's precedent), `any_plus_string_test`, and
+    `plus_string_fallback_test` (exercises the generic path via `.map()`, replacing dart's
+    `.settable()` — simpler here since we don't need a real recursive-grammar setup just to get a
+    non-`CharParser` `Parser<char>`). Dropped from the port: the `isA<RepeatingCharacterParser>()`
+    checks (no reflection/type-introspection available to assert "the fast path was taken"); `any
+    (unicode)` (no `unicode:` flag concept in this port); `repeat erroneous` (dart asserts `min >=
+    0`/`max >= min`, but no repeater in this codebase validates that invariant, so adding it here
+    alone would be new scope, not a port).
+- `SeparatedList<T, Sep>` (`src/parser/repeater/separated.rs`, exported via prelude) — `rep_sep`/
+  `star_sep`/`plus_sep`/`times_sep` deliberately diverge from dart here: dart's actual
+  `starSeparated`/`plusSeparated`/`timesSeparated`/`repeatSeparated` always return a
+  `SeparatedList<R, S>` (elements *and* separators kept distinct); ours instead return a
+  flattened `Vec<T>` (separators discarded) for the common "I don't care about separators" case
+  (CSV values, function-call arguments), with a *separate* `rep_with_sep`/`star_with_sep`/
+  `plus_with_sep`/`times_with_sep` family added for when separators matter (e.g. operands
+  separated by distinct operators). The flattened family is a thin composition over the rich
+  one — `rep_sep(sep, min, max, trailing)` is exactly
+  `rep_with_sep(sep, min, max, trailing).map(|sl| sl.elements)` — so the interleaving loop exists
+  exactly once; `.map()`'s `fast_parse_on` already skips the closure entirely (see the
+  `fast_parse_on` side-effect-gap fix below), so the flattened family costs nothing extra on the
+  fast path.
+  - **`Trailing` enum** (`Disallowed`/`Allowed`/`Required`) — a deliberate, user-requested
+    extension beyond dart, which has no trailing-separator concept at all (its current
+    `SeparatedRepeatingParser.parseOn` always discards a dangling separator and rewinds, same as
+    our `Disallowed`). Added because real grammars commonly allow (Rust argument lists) or even
+    require a separator after every element including the last. Chosen as a 3-variant enum
+    instead of a `bool` specifically to avoid boolean blindness at call sites
+    (`star_sep(sep, Trailing::Allowed)` reads at the call site; `star_sep(sep, true)` doesn't).
+  - **Where trailing is actually resolved — two places, not one.** The first instinct (mine,
+    initially wrong) was "leave the existing min/max loops completely untouched and tack on one
+    extra step at the very end that tries to consume one more bare separator." That tack-on step
+    *is* necessary and present (`SeparatedListRepeatingParser::parse_on`'s final `match
+    self.trailing` block) — it's what covers `min == max` (the max-loop body never executes at
+    all when `times_sep`-style fixed counts are already satisfied by the min-loop) and "no
+    separator found at all" (the max-loop's own separator-level `break`). But it is *not* where
+    the common case gets resolved: when a separator succeeds and the *following* element then
+    fails — which is the literal definition of "found a trailing separator" — the max loop's
+    existing logic takes an early `return` (discard the separator, rewind to before it,
+    `Disallowed`-style) before the function ever reaches the tack-on step. A pair of tests
+    written specifically to exercise this (`"a,b,c,"` with `Trailing::Allowed`/`Required`) caught
+    it immediately: both came back with the separator discarded exactly as if `Disallowed` had
+    been passed. Fixed by giving that early-return branch its own three-way fork — `Disallowed`
+    pops the separator and rewinds to `previous` (unchanged), `Allowed`/`Required` keep it and
+    return at `current` (which already reflects the separator having been consumed) instead of
+    popping/rewinding. `fast_parse_on`'s mirror needed the identical fork (`previous` vs.
+    `current`, position-only). Lesson for next time a "loops stay the same, add one step at the
+    end" design is proposed for an interleaved repeat/separator structure: identify *every* early-
+    return inside the loop first — each one is a chance for new state to be resolved on a path
+    that never reaches the tack-on.
+  - **Empty-match + `Required` is not a contradiction.** A second real bug, caught by its own
+    dedicated regression test: the trailing-probe step originally ran unconditionally, so
+    `star_with_sep(sep, Trailing::Required)` on empty input hard-failed just because no separator
+    was found — even though zero elements vacuously satisfies "every element is followed by a
+    required separator" (the same way `star()` always succeeds on empty input). Fixed by guarding
+    both the early-return branch's and the tack-on's `Allowed | Required` arms with
+    `!elements.is_empty()` (`parse_on`)/`count > 0` (`fast_parse_on`) — already present
+    one level up in the same loops as the pattern to follow.
+  - Tested in `tests/repeater_tests.rs`: `times_sep_matches_exact_count`/`_fails_when_too_few`/
+    `_ignores_extra_elements` plus the `with_sep` group (`star_with_sep_test`/`plus_with_sep_test`/
+    `times_with_sep_test`/`rep_with_sep_test`, ported from dart's `parser_repeater_test.dart`'s
+    `separated` group with `Trailing::Disallowed`, messages translated to this project's "expected
+    X, but found/reached Y" convention) plus a dedicated `Trailing` matrix for both the flattened
+    and rich families (`sep_trailing_*`/`with_sep_trailing_*`) covering `Allowed` consuming the
+    trailing separator, `Disallowed` stopping before it, `Required` failing without one,
+    `Required` succeeding vacuously on an empty match, and the `min == max` edge case for both
+    `Allowed` and `Required`. Not yet ported: dart's separate `separated list` test group, which
+    exercises `SeparatedList`'s own utility methods (`sequential`, `foldLeft`, `foldRight`,
+    `toString`) — those methods don't exist on our `SeparatedList<T, Sep>` yet (currently just
+    `elements`/`separators` fields plus `Clone`/`Debug`/`PartialEq`), deferred as a follow-up.
 
 ## What's Next
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
@@ -455,13 +566,17 @@ hit the compiler error cold):
   (extended `seq4_test` with all 4 failure positions, added `seq9_test` to confirm the pattern
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
-  Deferred (needs new features, scope B/C): `SeparatedList` typed results, string repeaters,
+  Deferred (needs new features, scope B/C):
   regex char parsers, reflection/introspection
   (`children`, `copy`, deep-equality — needed for dart's `expectParserInvariants` assertions).
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
-  alias)/`pick`/`Token::join` are now implemented. `Token::join` is a notable example of why
+  alias)/`pick`/`Token::join`/string repeaters (`star_string`/`plus_string`/`times_string`/
+  `rep_string`)/`SeparatedList<T, Sep>` typed results with a `Trailing` flag (`rep_with_sep`/
+  `star_with_sep`/`plus_with_sep`/`times_with_sep`, see "What's Implemented") are now implemented.
+  `SeparatedList`'s own utility methods (`sequential`/`fold_left`/`fold_right`/`Display`, dart's
+  `sequential`/`foldLeft`/`foldRight`/`toString`) are not — still deferred. `Token::join` is a notable example of why
   `T: Clone`/`Debug` bounds belong on the *method* that needs them, not the surrounding
   `impl<T> Token<T>` block — consuming the input iterator by value to build the result `Vec<T>`
   means `join` doesn't actually need `T: Clone` at all, and an earlier draft that collected into
