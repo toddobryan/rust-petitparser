@@ -1,7 +1,7 @@
 use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -18,6 +18,93 @@ pub enum Trailing {
 pub struct SeparatedList<T, Sep> {
     pub elements: Vec<T>,
     pub separators: Vec<Sep>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Interleaved<T, S> {
+    Element(T),
+    Separator(S),
+}
+
+impl<T, Sep> SeparatedList<T, Sep> {
+    pub fn sequential(&self) -> impl Iterator<Item = Interleaved<&T, &Sep>> {
+        let mut interleaved: Vec<Interleaved<&T, &Sep>> = Vec::new();
+        let mut i: usize = 0;
+        while i < self.elements.len() {
+            interleaved.push(Interleaved::Element(&self.elements[i]));
+            if i < self.separators.len() {
+                interleaved.push(Interleaved::Separator(&self.separators[i]));
+            }
+            i += 1;
+        }
+        interleaved.into_iter()
+    }
+
+    /// folds over the list of elements and separators; requires there to
+    /// be one more element than separator
+    pub fn fold(self, f: impl Fn(T, Sep, T) -> T) -> T {
+        assert!(
+            !self.elements.is_empty(),
+            "Can't call fold on an empty SeparatedList"
+        );
+        assert!(
+            self.elements.len() - 1 == self.separators.len(),
+            "Can't call fold unless there is exactly one more element than separator"
+        );
+        let mut elements = self.elements.into_iter();
+        let mut separators = self.separators.into_iter();
+        let mut result = elements.next().unwrap();
+        loop {
+            let s = separators.next();
+            let e = elements.next();
+            match (s, e) {
+                (Some(s), Some(e)) => result = f(result, s, e),
+                _ => break,
+            }
+        }
+        result
+    }
+
+    /// folds over the list of elements and separators back to front;
+    /// requires there to be one more element than separator
+    pub fn rfold(self, f: impl Fn(T, Sep, T) -> T) -> T {
+        assert!(
+            !self.elements.is_empty(),
+            "Can't call rfold on an empty SeparatedList"
+        );
+        assert!(
+            self.elements.len() - 1 == self.separators.len(),
+            "Can't call rfold unless there is exactly one more element than separator"
+        );
+        let mut elements = self.elements.into_iter();
+        let mut separators = self.separators.into_iter();
+        let mut result = elements.next_back().unwrap();
+        loop {
+            let s = separators.next_back();
+            let e = elements.next_back();
+            match (s, e) {
+                (Some(s), Some(e)) => result = f(e, s, result),
+                _ => break,
+            }
+        }
+        result
+    }
+}
+
+impl<T: Display, Sep: Display> Display for SeparatedList<T, Sep> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SeparatedList({})",
+            self.sequential()
+                .map(|e_or_s| match e_or_s {
+                    Interleaved::Element(e) => format!("{e}"),
+                    Interleaved::Separator(s) => format!("{s}"),
+                })
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
 }
 
 #[derive(Clone, Debug)]

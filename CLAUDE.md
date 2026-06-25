@@ -370,10 +370,48 @@ hit the compiler error cold):
     and rich families (`sep_trailing_*`/`with_sep_trailing_*`) covering `Allowed` consuming the
     trailing separator, `Disallowed` stopping before it, `Required` failing without one,
     `Required` succeeding vacuously on an empty match, and the `min == max` edge case for both
-    `Allowed` and `Required`. Not yet ported: dart's separate `separated list` test group, which
-    exercises `SeparatedList`'s own utility methods (`sequential`, `foldLeft`, `foldRight`,
-    `toString`) — those methods don't exist on our `SeparatedList<T, Sep>` yet (currently just
-    `elements`/`separators` fields plus `Clone`/`Debug`/`PartialEq`), deferred as a follow-up.
+    `Allowed` and `Required`.
+  - **`SeparatedList`'s own utility methods: done** — `sequential()`, `fold()`/`rfold()` (named to
+    match `Iterator::fold`/`DoubleEndedIterator::rfold`'s own convention rather than dart's
+    `foldLeft`/`foldRight`), and `Display`. Bounds are scoped to the method that actually needs
+    them, not the whole `impl<T, Sep> SeparatedList<T, Sep>` block — `sequential()` only ever
+    borrows (`&self.elements[i]`/`&self.separators[i]`), and `fold`/`rfold` consume `self` and
+    move `T`/`Sep` by value into the callback (mirroring `Token::join`'s `Clone`-avoidance
+    reasoning), so neither needs any bound at all; only `Display` needs `T: Display, Sep:
+    Display`. `sequential()` returns `impl Iterator<Item = Interleaved<&T, &Sep>>` — a small new
+    public enum (`Element(T)`/`Separator(S)`) standing in for dart's untyped `Iterable<dynamic>`,
+    since Rust has no union type for "R or S" — built eagerly into a `Vec` then `.into_iter()`'d
+    rather than as a true lazy generator (`std::iter::from_fn` with hand-tracked index/flag state
+    is the closest stable-Rust analogue to dart's `sync*`/`yield`, since generators aren't stable;
+    not worth the complexity here since a finished parse's `SeparatedList` is never unbounded).
+    `fold`/`rfold` panic on an empty list (`"Can't call fold/rfold on an empty SeparatedList"`),
+    matching dart's `throwsStateError`, and *deliberately* still require exactly one fewer
+    separator than element (reject a trailing separator) even though the struct itself now allows
+    `separators.len() == elements.len()` via `Trailing::Allowed`/`Required` — a trailing separator
+    is data fed into the fold callback with no right-hand operand to combine with (e.g. `2 + 3 *`
+    parsed with a trailing `*`), almost certainly a mistake worth surfacing rather than silently
+    dropping, unlike a trailing comma in a parsed CSV/argument list which carries no value at all.
+    Two real bugs found and fixed while implementing this, both in the same assert:
+    `self.elements.len() - 1 == self.separators.len()` had the comparison backwards (asserts
+    elements has *one fewer* than separators, the opposite of the intended relationship — failed
+    on the ordinary 3-element/2-separator case) and underflowed outright on the smallest non-empty
+    case (single element, zero separators: `0usize - 1` panics with "attempt to subtract with
+    overflow" before the comparison ever runs). Fixed to `self.elements.len() - 1 ==
+    self.separators.len()` — the subtraction is underflow-safe here specifically because it only
+    executes after the preceding `!self.elements.is_empty()` assert already guarantees
+    `elements.len() >= 1`. A third bug
+    surfaced only once the `toString`/`Display` test was being ported: the original `Display`
+    impl formatted each `Interleaved<&T, &Sep>` item via `{:?}` (`Debug`) on the whole enum,
+    producing `SeparatedList(Element("1"), Separator("+"), Element("2"))` instead of dart's clean
+    `SeparatedList(1, +, 2)` — fixed by requiring `T: Display, Sep: Display` instead of `Debug`
+    and pattern-matching to format just the inner value with `{}` before joining.
+  - Tested in `tests/repeater_tests.rs`'s `separated_list_*` group, ported from dart's
+    `parser_repeater_test.dart`'s `separated list` group (`elements`/`separators`/`sequential`/
+    `fold`/`rfold`/`display`, using `fold`/`rfold` for dart's `foldLeft`/`foldRight` and `display`
+    for dart's `toString`). Not ported: dart's exact `toString` assertions, which bake the generic
+    type arguments into the string via `$runtimeType` (e.g. `"SeparatedList<String,
+    String>(...)"`) — no clean Rust equivalent, so the ported test checks our actual
+    `"SeparatedList(...)"` format (sans type arguments) instead of dart's substring-only check.
 
 ## What's Next
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)

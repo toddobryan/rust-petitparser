@@ -870,3 +870,293 @@ fn plus_string_fallback_test() {
     assert_success!(p, "aa", "aa", 2);
     assert_success!(p, "aaa", "aaa", 3);
 }
+
+// SeparatedList<T, Sep>'s own utility methods -- ported from dart's
+// `parser_repeater_test.dart`'s "separated list" group (elements/separators/sequence/foldLeft/
+// foldRight/toString). Dart's toString bakes the generic type arguments into the output via
+// `$runtimeType` (e.g. "SeparatedList<String, String>(...)") -- not replicated here (no clean
+// equivalent to `$runtimeType` in Rust), so the ported display test checks our actual
+// "SeparatedList(...)" format instead of dart's substring-only check.
+
+#[gtest]
+fn separated_list_elements() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    let double = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string()],
+        separators: vec!["+".to_string()],
+    };
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    let quadruple = SeparatedList {
+        elements: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ],
+        separators: vec!["+".to_string(), "-".to_string(), "*".to_string()],
+    };
+    let mixed = SeparatedList {
+        elements: vec![1, 2, 3],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+
+    assert_that!(empty.elements, eq(&Vec::<String>::new()));
+    assert_that!(single.elements, eq(&vec!["1".to_string()]));
+    assert_that!(double.elements, eq(&vec!["1".to_string(), "2".to_string()]));
+    assert_that!(
+        triple.elements,
+        eq(&vec!["1".to_string(), "2".to_string(), "3".to_string()])
+    );
+    assert_that!(
+        quadruple.elements,
+        eq(&vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string()
+        ])
+    );
+    assert_that!(mixed.elements, eq(&vec![1, 2, 3]));
+}
+
+#[gtest]
+fn separated_list_separators() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    let double = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string()],
+        separators: vec!["+".to_string()],
+    };
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    let quadruple = SeparatedList {
+        elements: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ],
+        separators: vec!["+".to_string(), "-".to_string(), "*".to_string()],
+    };
+    let mixed = SeparatedList {
+        elements: vec![1, 2, 3],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+
+    assert_that!(empty.separators, eq(&Vec::<String>::new()));
+    assert_that!(single.separators, eq(&Vec::<String>::new()));
+    assert_that!(double.separators, eq(&vec!["+".to_string()]));
+    assert_that!(
+        triple.separators,
+        eq(&vec!["+".to_string(), "-".to_string()])
+    );
+    assert_that!(
+        quadruple.separators,
+        eq(&vec!["+".to_string(), "-".to_string(), "*".to_string()])
+    );
+    assert_that!(
+        mixed.separators,
+        eq(&vec!["+".to_string(), "-".to_string()])
+    );
+}
+
+#[gtest]
+fn separated_list_sequential() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    assert_that!(empty.sequential().collect::<Vec<_>>(), eq(&vec![]));
+
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    assert_that!(
+        single.sequential().collect::<Vec<_>>(),
+        eq(&vec![Interleaved::Element(&single.elements[0])])
+    );
+
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(
+        triple.sequential().collect::<Vec<_>>(),
+        eq(&vec![
+            Interleaved::Element(&triple.elements[0]),
+            Interleaved::Separator(&triple.separators[0]),
+            Interleaved::Element(&triple.elements[1]),
+            Interleaved::Separator(&triple.separators[1]),
+            Interleaved::Element(&triple.elements[2]),
+        ])
+    );
+
+    let mixed = SeparatedList {
+        elements: vec![1, 2, 3],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(
+        mixed.sequential().collect::<Vec<_>>(),
+        eq(&vec![
+            Interleaved::Element(&mixed.elements[0]),
+            Interleaved::Separator(&mixed.separators[0]),
+            Interleaved::Element(&mixed.elements[1]),
+            Interleaved::Separator(&mixed.separators[1]),
+            Interleaved::Element(&mixed.elements[2]),
+        ])
+    );
+}
+
+fn paren_combine(first: String, sep: String, second: String) -> String {
+    format!("({first}{sep}{second})")
+}
+
+#[gtest]
+fn separated_list_fold() {
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    assert_that!(single.fold(paren_combine), eq("1"));
+
+    let double = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string()],
+        separators: vec!["+".to_string()],
+    };
+    assert_that!(double.fold(paren_combine), eq("(1+2)"));
+
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(triple.fold(paren_combine), eq("((1+2)-3)"));
+
+    let quadruple = SeparatedList {
+        elements: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ],
+        separators: vec!["+".to_string(), "-".to_string(), "*".to_string()],
+    };
+    assert_that!(quadruple.fold(paren_combine), eq("(((1+2)-3)*4)"));
+}
+
+#[gtest]
+#[should_panic(expected = "Can't call fold on an empty SeparatedList")]
+fn separated_list_fold_on_empty_panics() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    let _ = empty.fold(paren_combine);
+}
+
+#[gtest]
+fn separated_list_rfold() {
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    assert_that!(single.rfold(paren_combine), eq("1"));
+
+    let double = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string()],
+        separators: vec!["+".to_string()],
+    };
+    assert_that!(double.rfold(paren_combine), eq("(1+2)"));
+
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(triple.rfold(paren_combine), eq("(1+(2-3))"));
+
+    let quadruple = SeparatedList {
+        elements: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ],
+        separators: vec!["+".to_string(), "-".to_string(), "*".to_string()],
+    };
+    assert_that!(quadruple.rfold(paren_combine), eq("(1+(2-(3*4)))"));
+}
+
+#[gtest]
+#[should_panic(expected = "Can't call rfold on an empty SeparatedList")]
+fn separated_list_rfold_on_empty_panics() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    let _ = empty.rfold(paren_combine);
+}
+
+#[gtest]
+fn separated_list_display() {
+    let empty: SeparatedList<String, String> = SeparatedList {
+        elements: vec![],
+        separators: vec![],
+    };
+    assert_that!(empty.to_string(), eq("SeparatedList()"));
+
+    let single: SeparatedList<String, String> = SeparatedList {
+        elements: vec!["1".to_string()],
+        separators: vec![],
+    };
+    assert_that!(single.to_string(), eq("SeparatedList(1)"));
+
+    let double = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string()],
+        separators: vec!["+".to_string()],
+    };
+    assert_that!(double.to_string(), eq("SeparatedList(1, +, 2)"));
+
+    let triple = SeparatedList {
+        elements: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(triple.to_string(), eq("SeparatedList(1, +, 2, -, 3)"));
+
+    let quadruple = SeparatedList {
+        elements: vec![
+            "1".to_string(),
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+        ],
+        separators: vec!["+".to_string(), "-".to_string(), "*".to_string()],
+    };
+    assert_that!(
+        quadruple.to_string(),
+        eq("SeparatedList(1, +, 2, -, 3, *, 4)")
+    );
+
+    let mixed = SeparatedList {
+        elements: vec![1, 2, 3],
+        separators: vec!["+".to_string(), "-".to_string()],
+    };
+    assert_that!(mixed.to_string(), eq("SeparatedList(1, +, 2, -, 3)"));
+}
