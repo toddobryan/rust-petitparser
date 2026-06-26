@@ -482,6 +482,53 @@ hit the compiler error cold):
   unit tests in the macro crate itself, with the happy-path arities (2 through 9) and failure
   propagation covered by ordinary integration tests using real `seq!(...)` invocations
   (`tests/seq_macro_tests.rs`).
+  **Trailing-closure fusion (implemented):** `seq!(a, b, c, |x, y, z| ...)` now fuses into
+  `seq3(a, b, c).map3(|x, y, z| ...)` in one expansion, rather than requiring a separate
+  `.mapN(...)` call afterward — the originally-discussed design, now built. Implementation:
+  collect the parsed `Punctuated<Expr, Comma>` into a `Vec<Expr>`, then `.pop()` the last element
+  and pattern-match it against `Expr::Closure(c)` — if it matches, `c` (a `syn::ExprClosure`) is
+  the fused closure and the remaining `Vec` is the parser list; if not, push the popped value
+  back onto the `Vec` unchanged and treat the whole thing as a plain (non-fused) call, same as
+  before. The arity used for `seqN`/`mapN` is computed from the parser-only count (closure already
+  removed), so a 3-parser-plus-closure call still picks `seq3`/`map3`, not `seq4`/`map4`. The
+  empty-vs-non-empty optional suffix (`.mapN(closure)` or nothing) is built as its own
+  `TokenStream2` fragment first (`quote! { .#map_name(#closure) }` or plain `quote! {}` for the
+  empty case) and spliced in via `#map` — `quote!{}` is the literal "empty token stream" value,
+  letting the conditional logic live outside the final `quote!` block rather than needing
+  `quote!`'s repetition syntax to express an if/else. Also switched the parser-list interpolation
+  from the earlier `#input` trick (which only worked because `input` was still a `Punctuated`,
+  with its own comma-joining `ToTokens` impl) to `#(#exprs),*` real repetition syntax, since
+  popping the closure off requires converting to a plain `Vec<Expr>` first, which has no such
+  impl. **Deliberately not implemented:** validating that the closure's parameter count
+  (`ExprClosure.inputs.len()`) matches the parser count before emitting — a mismatch is just left
+  to surface as an ordinary Rust type error from the generated `.mapN(closure)` call (confirmed:
+  `seq!(char('a'), char('b'), char('c'), |a, b| ...)` — 3 parsers, 2-param closure — produces a
+  clean `E0593: closure is expected to take 3 arguments, but it takes 2 arguments` pointing
+  straight at the closure). Writing a custom check here would just duplicate validation the type
+  system already does correctly; the macro's own arity check (parser count in `2..=9`) is the
+  only validation that's actually the macro's own responsibility, since nothing downstream of the
+  macro checks *that*. Tested with the same split as everything else here: unit tests in
+  `seq.rs` (`fuses_trailing_closure_into_map_call`, `fuses_trailing_closure_at_min_arity` (2),
+  `fuses_trailing_closure_at_max_arity` (9), `rejects_too_few_parsers_with_trailing_closure` —
+  confirming the closure itself doesn't count toward the parser-arity floor) and integration
+  tests using real `seq!(...)` invocations in `tests/seq_macro_tests.rs`
+  (`seq_macro_fuses_trailing_closure`, `seq_macro_fuses_trailing_closure_at_min_arity`,
+  `seq_macro_fused_closure_failure_still_propagates`).
+  **Swept existing `seqN(...).mapN(closure)` chains to the fused form** where one already existed
+  — `src/parser/ext.rs` (`trim_with`), `src/expression/group.rs` (`wrapper`, which was still on
+  plain `.map(move |(l, t, r)| ...)` with tuple destructuring — looks like it was missed by the
+  earlier `mapN` sweep, picked up here while fusing it directly), `tests/example-grammars/
+  tabular.rs`, `tests/example-grammars/uri.rs` (`credentials`), `tests/combinator_tests.rs`
+  (×3), `tests/misc_tests.rs` (×4, the `position()` tests). Deliberately did **not** sweep bare
+  `seqN(...)` calls with no `.mapN(...)` attached — `seq!` only pays for itself when it's
+  collapsing two calls into one; converting a standalone `seq3(a, b, c)` to `seq!(a, b, c)` with
+  nothing to fuse is a pure stylistic wash (same length, loses the "this is obviously a plain
+  function call" property) with no offsetting benefit. Also deliberately left `choiceN(...)`
+  call sites alone everywhere — `choice!` has no fusion counterpart (see "What's Next"), so there
+  was no genuine candidate to convert, anywhere in the codebase. **Excluded entirely from the
+  sweep: all four `#[grammar]`-based example grammars** (`pascal.rs`/`bibtex.rs`/`json.rs`/
+  `math.rs`) — see the dedicated "What's Next" entry on why `seq!`/`choice!` are currently unsafe
+  to use inside a `#[grammar]` module at all.
 - **`choice!` variadic macro** (`rust-petitparser-macros/src/choice.rs`, function-like
   `#[proc_macro]`, re-exported via `prelude.rs` alongside `seq`/`grammar`) — same shape as `seq!`
   above: `choice!(a, b, c)` expands to `choice3(a, b, c)`, via the identical
@@ -514,6 +561,27 @@ hit the compiler error cold):
   matching variant, not anything `choice!`/`choiceN` themselves need to solve.
 
 ## What's Next
+- **`seq!`/`choice!` don't work inside `#[grammar]` modules.** Confirmed with a minimal probe
+  grammar (a two-rule module where `start()` called `seq!(char('a'), rest())`): expansion failed
+  with `E0618: expected function, found SettableParser<Vec<char>>` on the `rest()` call. Root
+  cause: `#[grammar]`'s `ParserCallRewriter` (`rust-petitparser-macros/src/grammar.rs`) rewrites
+  bare rule self-calls like `rest()` → `rest.borrow()` by walking the function body with
+  `syn::visit_mut::VisitMut`, matching `Expr::Call` nodes specifically. `seq!(char('a'), rest())`
+  wraps `rest()` inside an `Expr::Macro` node instead (the macro's input is opaque, unparsed
+  tokens from `syn`'s point of view), and `VisitMut`'s default traversal doesn't recurse into a
+  macro invocation's arguments to find and rewrite calls inside it — so the rewrite silently
+  doesn't happen, and the generated code tries to call the `SettableParser` field as a function.
+  This means **`seq!`/`choice!` are currently unsafe to use anywhere inside `pascal.rs`/
+  `bibtex.rs`/`json.rs`/`math.rs`** (all four `#[grammar]`-based example grammars) — stick to
+  plain `seqN`/`choiceN` there until this is fixed. Likely fix: extend `ParserCallRewriter`'s
+  `visit_expr_mut` to special-case `Expr::Macro` — re-parse the macro's token stream as a
+  comma-separated expression list (same as `seq!`/`choice!`'s own input shape), recursively visit
+  each parsed expression, then re-emit the rewritten tokens back into the macro invocation. This
+  may end up overlapping with (or even falling out for free from) the reflection/introspection
+  work already deferred for the dart-parity linter port (`children`/`copy`/deep-equality, see the
+  scope B/C notes below) — both problems are fundamentally about walking into places the current
+  grammar macro doesn't look, so whatever AST/token traversal infrastructure that work ends up
+  building might directly solve this too rather than needing a second bespoke `Expr::Macro` case.
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
   are already covered by `tests/example-grammars/{json,expr}.rs`. Done so far: **tabular**
@@ -743,14 +811,11 @@ hit the compiler error cold):
 - **Deliberately NOT ported:** dart's `cast` / `castList` parsers. Rust has no easy runtime
   cast, and the idiomatic equivalent is for callers to `impl From<T>` and use `.map(Into::into)`
   / `.into()`. Don't add these even for test parity.
-- **Trailing-closure fusion for `seq!`/`choice!`** — the idea discussed while designing `seq!`
-  (`seq!(a, b, c, |x, y, z| ...)` fusing into `seq3(a,b,c).map3(...)`, with the macro detecting
-  whether the last parsed `Expr` is a `syn::Expr::Closure` and branching) was *not* built for
-  either macro — both are implemented (see "What's Implemented") as plain arity dispatch only.
-  Still open for either macro if it turns out to be worth the added parsing complexity. Note this
-  doesn't make sense for `choice!` the same way it does for `seq!`: `choiceN` already produces a
-  single `T` (not a tuple), so there's no destructuring-tuple-in-a-closure problem for it to
-  solve — `choice!`'s case for the fusion, if there ever is one, would be different from `seq!`'s.
+- **Trailing-closure fusion for `choice!`** — `seq!` got this (see "What's Implemented"); `choice!`
+  deliberately didn't, and still hasn't. `choiceN` already produces a single `T` (not a tuple), so
+  there's no destructuring-tuple-in-a-closure problem for it to solve the way `seq!` had — if
+  `choice!` ever gets a fused form, the motivating case would have to be something else entirely,
+  not a port of `seq!`'s reasoning.
 
 ## `#[grammar]` Proc Macro (implemented)
 

@@ -97,7 +97,12 @@ pub fn parse_authority(input: &str) -> Authority {
 }
 
 fn credentials() -> impl Parser<(String, Option<(char, String)>)> {
-    seq3(username(), seq2(char(':'), password()).opt(), char('@')).map3(|u, p, _| (u, p))
+    seq!(
+        username(),
+        seq2(char(':'), password()).opt(),
+        char('@'),
+        |u, p, _| (u, p)
+    )
 }
 
 fn username() -> impl Parser<String> {

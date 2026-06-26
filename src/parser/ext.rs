@@ -23,6 +23,7 @@ use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use crate::parser::repeater::separated::{SeparatedList, SeparatedListRepeatingParser, Trailing};
 use crate::prelude::any;
+use rust_petitparser_macros::seq;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -265,7 +266,7 @@ where
         Aft: Debug,
         Bef: Debug,
     {
-        seq3(before, self, after).map3(|_, val, _| val)
+        seq!(before, self, after, |_, val, _| val)
     }
 
     fn and(self) -> impl Parser<T> {

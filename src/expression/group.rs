@@ -4,7 +4,8 @@ use std::rc::Rc;
 use crate::core::parser::Parser;
 use crate::parser::combinator::choice::{Choice2, SELECT_SECOND, choice2};
 use crate::parser::combinator::sequence::{seq2, seq3};
-use crate::parser::ext::{MapTuple2, ParserExt};
+use crate::parser::ext::{MapTuple2, MapTuple3, ParserExt};
+use rust_petitparser_macros::seq;
 
 #[derive(Clone, Debug)]
 pub struct ExpressionGroup<T> {
@@ -36,7 +37,9 @@ impl<T: Debug + 'static> ExpressionGroup<T> {
         right: impl Parser<R> + 'static,
         callback: fn(L, T, R) -> T,
     ) {
-        let p = seq3(left, self.loopback.clone(), right).map(move |(l, t, r)| callback(l, t, r));
+        let p = seq!(left, self.loopback.clone(), right, move |l, t, r| {
+            callback(l, t, r)
+        });
         self.wrapper.push(Rc::new(p));
     }
 
