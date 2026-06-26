@@ -468,18 +468,50 @@ hit the compiler error cold):
   **Testing the out-of-range arity error without a new dependency:** the obvious approach for
   testing a macro's compile-error path is `trybuild` (compile a fixture file, assert it fails),
   but that's a new dev-dependency for one test. Used a lighter, dependency-free pattern instead:
-  split `seq_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream` into a thin
-  boundary (`seq_impl(input) { seq_impl2(input.into()).into() }`) plus an inner
-  `seq_impl2(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream` holding all the real
-  logic. `proc_macro2::TokenStream` (unlike `proc_macro::TokenStream`) can be constructed and
-  inspected in an ordinary `#[test]`, outside any actual macro-expansion context — `proc_macro2`
-  exists specifically to make `syn`/`quote`-based code testable this way, which is also why `syn`
-  and `quote` are built on it rather than `proc_macro` directly. This let the arity-boundary tests
-  (`rust-petitparser-macros/src/seq.rs`'s `#[cfg(test)] mod tests` — `rejects_too_few_parsers`,
-  `rejects_too_many_parsers`, plus `accepts_two_parsers`/`accepts_nine_parsers` checking the
-  generated tokens' `.to_string()` directly) live as plain unit tests in the macro crate itself,
-  with the happy-path arities (2 through 9) and failure propagation covered by ordinary
-  integration tests using real `seq!(...)` invocations (`tests/seq_macro_tests.rs`).
+  each module's real logic (`seq_impl`/`choice_impl`, see `choice!` below) takes and returns
+  `proc_macro2::TokenStream`, not `proc_macro::TokenStream` — the `proc_macro::TokenStream`
+  boundary conversion (`.into()` each way) happens only in `lib.rs`'s `#[proc_macro] pub fn
+  seq`/`choice` entry points, which just call straight through
+  (`seq_impl(input.into()).into()`). `proc_macro2::TokenStream` (unlike `proc_macro::TokenStream`)
+  can be constructed and inspected in an ordinary `#[test]`, outside any actual macro-expansion
+  context — `proc_macro2` exists specifically to make `syn`/`quote`-based code testable this way,
+  which is also why `syn` and `quote` are built on it rather than `proc_macro` directly. This let
+  the arity-boundary tests (`rust-petitparser-macros/src/seq.rs`'s `#[cfg(test)] mod tests` —
+  `rejects_too_few_parsers`, `rejects_too_many_parsers`, plus `accepts_two_parsers`/
+  `accepts_nine_parsers` checking the generated tokens' `.to_string()` directly) live as plain
+  unit tests in the macro crate itself, with the happy-path arities (2 through 9) and failure
+  propagation covered by ordinary integration tests using real `seq!(...)` invocations
+  (`tests/seq_macro_tests.rs`).
+- **`choice!` variadic macro** (`rust-petitparser-macros/src/choice.rs`, function-like
+  `#[proc_macro]`, re-exported via `prelude.rs` alongside `seq`/`grammar`) — same shape as `seq!`
+  above: `choice!(a, b, c)` expands to `choice3(a, b, c)`, via the identical
+  parse-as-`Punctuated<Expr, Token![,]>` → count → `format_ident!("choice{}", n)` → `quote!`
+  pipeline, the same `2..=9` arity validation with `syn::Error::to_compile_error()`, and the same
+  `proc_macro2`-testable-inner-function split for testing that error path without `trybuild`.
+  Two real bugs found in the first draft, both caught by `cargo build -p rust-petitparser-macros`
+  before any test was even written: (1) `return Error::new_spanned(...).to_compile_error(),` —
+  trailing comma instead of semicolon, a plain syntax error (`return EXPR,` isn't valid Rust;
+  `return` statements end in `;`), confirmed directly from the rustc diagnostic
+  (`` expected one of `.`, `;`, `?`, `}`, or an operator, found `,` ``). (2) the call-building
+  `quote!` block was written as `#function_name(input)` — missing the `#` sigil in front of
+  `input` entirely (not the repetition-syntax confusion that hit `seq!`'s first draft, just a
+  plain dropped sigil). Without `#`, `quote!` doesn't interpolate the variable at all; it emits
+  the literal identifier `input` into the generated code, so `choice!(a, b, c)` would have
+  expanded to `choice3(input)` — referencing a variable named `input` that doesn't exist at the
+  call site, not the three parser expressions the caller actually wrote. Fixed to `#input`,
+  mirroring `seq!`'s identical fix. Tested in `rust-petitparser-macros/src/choice.rs`'s
+  `#[cfg(test)] mod tests` (same four cases as `seq!`) and `tests/choice_macro_tests.rs`
+  (arities 2 through 9 plus failure-propagation, using real `choice!(...)` invocations).
+  Type-unification gotcha worth flagging to users: Rust requires every alternative passed to
+  `choice!`/`choiceN` to produce the same `T`, unlike dart's dynamically-typed `toChoiceParser()`.
+  We hit this twice during the example-grammar ports, pre-dating `choice!` itself —
+  `bibtex.rs`'s `field_string_within_braces` (three alternatives erased to `Parser<()>` via
+  `.map(|_| ())` since only the consumed span mattered, recovered later via
+  `.input_with_message(...)`) and `pascal.rs`'s whole grammar (typed `Parser<()>` everywhere from
+  the start, since it's a pure recognizer with no AST, so the 11-way `statement()` choice never
+  even hit a type mismatch). Neither case needed actual heterogeneous *values* preserved; if a
+  future caller does, the fix is a small sum-type enum with each arm `.map()`-ed into the
+  matching variant, not anything `choice!`/`choiceN` themselves need to solve.
 
 ## What's Next
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
@@ -711,25 +743,14 @@ hit the compiler error cold):
 - **Deliberately NOT ported:** dart's `cast` / `castList` parsers. Rust has no easy runtime
   cast, and the idiomatic equivalent is for callers to `impl From<T>` and use `.map(Into::into)`
   / `.into()`. Don't add these even for test parity.
-- **Variadic `choice!` macro**, mirroring `seq!` (see "What's Implemented") — `choice!(a, b, c)`
-  should expand to `choice3(a, b, c)`. `seq!` itself is now done, and ended up as a function-like
-  `#[proc_macro]` (counting the actual parsed expressions) rather than the originally-sketched
-  `macro_rules!` arity-dispatch approach (one match arm per arity) — `choice!` should follow the
-  same proc-macro shape, reusing the count → `format_ident!("choice{}", n)` → `quote!` pattern,
-  plus the same out-of-range-arity `syn::Error::to_compile_error()` handling and the
-  `proc_macro2`-testable-inner-function split for testing that error path. The
-  type-unification gotcha to flag for users: Rust requires every choice alternative to produce the
-  same `T`, unlike dart's dynamically-typed `toChoiceParser()`. We hit this twice during the
-  example-grammar ports — `bibtex.rs`'s `field_string_within_braces` (three alternatives erased to
-  `Parser<()>` via `.map(|_| ())` since only the consumed span mattered, recovered later via
-  `.input_with_message(...)`) and `pascal.rs`'s whole grammar (typed `Parser<()>` everywhere from
-  the start, since it's a pure recognizer with no AST, so the 11-way `statement()` choice never
-  even hit a type mismatch). Neither case needed actual heterogeneous *values* preserved; if a
-  future caller does, the fix is a small sum-type enum with each arm `.map()`-ed into the matching
-  variant, not anything `choice!` itself needs to solve. The trailing-closure-fusion idea discussed
-  for `seq!` (`seq!(a, b, c, |x, y, z| ...)` fusing into `seq3(a,b,c).map3(...)`) was *not* built
-  for `seq!` — still open for either macro if it turns out to be worth the added parsing
-  complexity (detecting whether the last parsed `Expr` is a `syn::Expr::Closure` and branching).
+- **Trailing-closure fusion for `seq!`/`choice!`** — the idea discussed while designing `seq!`
+  (`seq!(a, b, c, |x, y, z| ...)` fusing into `seq3(a,b,c).map3(...)`, with the macro detecting
+  whether the last parsed `Expr` is a `syn::Expr::Closure` and branching) was *not* built for
+  either macro — both are implemented (see "What's Implemented") as plain arity dispatch only.
+  Still open for either macro if it turns out to be worth the added parsing complexity. Note this
+  doesn't make sense for `choice!` the same way it does for `seq!`: `choiceN` already produces a
+  single `T` (not a tuple), so there's no destructuring-tuple-in-a-closure problem for it to
+  solve — `choice!`'s case for the fusion, if there ever is one, would be different from `seq!`'s.
 
 ## `#[grammar]` Proc Macro (implemented)
 

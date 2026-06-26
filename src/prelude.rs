@@ -23,4 +23,4 @@ pub use crate::parser::misc::success::*;
 pub use crate::parser::predicate::*;
 pub use crate::parser::repeater::separated::{Interleaved, SeparatedList, Trailing};
 pub use crate::{assert_failure, assert_success};
-pub use rust_petitparser_macros::{grammar, seq};
+pub use rust_petitparser_macros::{choice, grammar, seq};
