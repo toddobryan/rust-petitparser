@@ -1,6 +1,5 @@
 use googletest::prelude::*;
 use rust_petitparser::prelude::*;
-use std::rc::Rc;
 
 #[gtest]
 fn all_matches_basic() {
