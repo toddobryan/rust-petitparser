@@ -312,25 +312,25 @@ fn newline_fails_on_non_newline() {
 
 #[gtest]
 fn position_at_start_of_empty_input() {
-    let p = seq!(any().star(), position(), |_, pos| pos);
+    let p = seq!(any().star(), position() => |_, pos| pos);
     assert_success!(p, "", 0, 0);
 }
 
 #[gtest]
 fn position_after_consuming_one_char() {
-    let p = seq!(any().star(), position(), |_, pos| pos);
+    let p = seq!(any().star(), position() => |_, pos| pos);
     assert_success!(p, "a", 1, 1);
 }
 
 #[gtest]
 fn position_after_consuming_two_chars() {
-    let p = seq!(any().star(), position(), |_, pos| pos);
+    let p = seq!(any().star(), position() => |_, pos| pos);
     assert_success!(p, "aa", 2, 2);
 }
 
 #[gtest]
 fn position_after_consuming_three_chars() {
-    let p = seq!(any().star(), position(), |_, pos| pos);
+    let p = seq!(any().star(), position() => |_, pos| pos);
     assert_success!(p, "aaa", 3, 3);
 }
 

@@ -52,7 +52,7 @@ where
     S: Debug,
     P: Parser<S> + Clone,
 {
-    token_parser(string(literal), spacer).map(|_| ())
+    token_parser(string(literal), spacer).constant(())
 }
 
 #[grammar]
@@ -66,11 +66,11 @@ mod smalltalk_grammar {
     // Whitespace and comments.
 
     fn spacer() -> impl Parser<()> {
-        choice2(whitespace().map(|_| ()), comment())
+        choice!(whitespace().constant(()), comment())
     }
 
     fn comment() -> impl Parser<()> {
-        seq3(char('"'), char('"').neg().star(), char('"')).map(|_| ())
+        seq!(char('"'), char('"').neg().star(), char('"')).constant(())
     }
 
     // ANSI-standard number literal.
@@ -92,12 +92,16 @@ mod smalltalk_grammar {
     }
 
     fn radix_integer() -> impl Parser<f64> {
-        seq3(radix_specifier(), char('r'), radix_digits())
-            .map3(|base, _, digits| i64::from_str_radix(&digits, base).unwrap() as f64)
+        seq!(
+            radix_specifier(),
+            char('r'),
+            radix_digits() =>
+            |base, _, digits| i64::from_str_radix(&digits, base).unwrap() as f64
+        )
     }
 
     fn integer() -> impl Parser<f64> {
-        choice2(radix_integer(), decimal_integer())
+        choice!(radix_integer(), decimal_integer())
     }
 
     fn exponent_letter() -> impl Parser<char> {
@@ -105,24 +109,28 @@ mod smalltalk_grammar {
     }
 
     fn exponent() -> impl Parser<f64> {
-        seq2(char('-'), decimal_integer()).map2(|_, d| -d)
+        seq!(char('-'), decimal_integer() => |_, d| -d)
     }
 
     fn mantissa() -> impl Parser<f64> {
-        seq3(digits(), char('.'), digits()).map3(|int_part, _, frac_part| {
+        seq!(digits(), char('.'), digits() => |int_part, _, frac_part| {
             format!("{int_part}.{frac_part}").parse::<f64>().unwrap()
         })
     }
 
     fn float() -> impl Parser<f64> {
-        seq2(mantissa(), seq2(exponent_letter(), exponent()).opt()).map2(|m, exp| match exp {
-            Some((_, e)) => m * 10f64.powf(e),
-            None => m,
-        })
+        seq!(
+            mantissa(),
+            seq!(exponent_letter(), exponent()).opt() =>
+            |m, exp| match exp {
+                Some((_, e)) => m * 10f64.powf(e),
+                None => m,
+            }
+        )
     }
 
     fn scaled_mantissa() -> impl Parser<f64> {
-        choice2(decimal_integer(), mantissa())
+        choice!(decimal_integer(), mantissa())
     }
 
     fn fractional_digits() -> impl Parser<f64> {
@@ -130,25 +138,38 @@ mod smalltalk_grammar {
     }
 
     fn scaled_decimal() -> impl Parser<f64> {
-        seq3(scaled_mantissa(), char('s'), fractional_digits().opt()).map3(|m, _, _frac| m)
+        seq!(
+            scaled_mantissa(),
+            char('s'),
+            fractional_digits().opt() =>
+            |m, _, _frac| m
+        )
     }
 
     fn positive_number() -> impl Parser<f64> {
-        choice3(scaled_decimal(), float(), integer())
+        choice!(scaled_decimal(), float(), integer())
     }
 
     fn number() -> impl Parser<f64> {
-        seq2(char('-').opt(), positive_number()).map2(|neg, n| if neg.is_some() { -n } else { n })
+        seq!(
+            char('-').opt(),
+            positive_number() =>
+            |neg, n| if neg.is_some() { -n } else { n }
+        )
     }
 
     // The original smalltalk grammar.
 
     fn identifier() -> impl Parser<String> {
-        seq2(pattern("a-zA-Z_"), word().star_string()).map2(|first, rest| format!("{first}{rest}"))
+        seq!(
+            pattern("a-zA-Z_"),
+            word().star_string() =>
+            |first, rest| format!("{first}{rest}")
+        )
     }
 
     fn keyword() -> impl Parser<String> {
-        seq2(identifier(), char(':')).map2(|id, _| format!("{id}:"))
+        seq!(identifier(), char(':') => |id, _| format!("{id}:"))
     }
 
     fn binary() -> impl Parser<String> {
@@ -156,7 +177,7 @@ mod smalltalk_grammar {
     }
 
     fn unary() -> impl Parser<String> {
-        seq2(identifier(), char(':').not()).map2(|id, _| id)
+        seq!(identifier(), char(':').not() => |id, _| id)
     }
 
     fn multiword() -> impl Parser<String> {
@@ -164,24 +185,24 @@ mod smalltalk_grammar {
     }
 
     fn character() -> impl Parser<String> {
-        seq2(char('$'), any()).map2(|_, c| c.to_string())
+        seq!(char('$'), any() => |_, c| c.to_string())
     }
 
     fn period() -> impl Parser<()> {
-        char('.').map(|_| ())
+        char('.').constant(())
     }
 
     fn string_lexical() -> impl Parser<String> {
-        seq3(
+        seq!(
             char('\''),
-            choice2(string("''").map(|_| '\''), none_of("'")).star(),
-            char('\''),
+            choice!(string("''").map(|_| '\''), none_of("'")).star(),
+            char('\'') =>
+            |_, chars: Vec<char>, _| chars.into_iter().collect()
         )
-        .map3(|_, chars: Vec<char>, _| chars.into_iter().collect())
     }
 
     fn symbol() -> impl Parser<String> {
-        choice4(unary(), binary(), multiword(), string_lexical())
+        choice!(unary(), binary(), multiword(), string_lexical())
     }
 
     fn identifier_token() -> impl Parser<String> {
@@ -229,19 +250,19 @@ mod smalltalk_grammar {
     }
 
     pub fn true_literal() -> impl Parser<Literal> {
-        seq2(string("true"), word().not())
+        seq!(string("true"), word().not())
             .trim_with(spacer().star(), spacer().star())
             .map(|_| Literal::Bool(true))
     }
 
     pub fn false_literal() -> impl Parser<Literal> {
-        seq2(string("false"), word().not())
+        seq!(string("false"), word().not())
             .trim_with(spacer().star(), spacer().star())
             .map(|_| Literal::Bool(false))
     }
 
     pub fn nil_literal() -> impl Parser<Literal> {
-        seq2(string("nil"), word().not())
+        seq!(string("nil"), word().not())
             .trim_with(spacer().star(), spacer().star())
             .map(|_| Literal::Nil)
     }
@@ -251,15 +272,15 @@ mod smalltalk_grammar {
     }
 
     pub fn symbol_literal() -> impl Parser<Literal> {
-        seq2(
+        seq!(
             token_str("#", spacer()).plus(),
-            token_parser(symbol(), spacer()),
+            token_parser(symbol(), spacer()) =>
+            |_, sym| Literal::Str(sym)
         )
-        .map2(|_, sym| Literal::Str(sym))
     }
 
     fn array_item() -> impl Parser<Literal> {
-        choice4(
+        choice!(
             literal(),
             symbol_literal_array(),
             array_literal_array(),
@@ -268,43 +289,43 @@ mod smalltalk_grammar {
     }
 
     pub fn array_literal() -> impl Parser<Literal> {
-        seq3(
+        seq!(
             token_str("#(", spacer()),
             array_item().star(),
-            token_str(")", spacer()),
+            token_str(")", spacer()) =>
+            |_, items, _| Literal::Array(items)
         )
-        .map3(|_, items, _| Literal::Array(items))
     }
 
     fn array_literal_array() -> impl Parser<Literal> {
-        seq3(
+        seq!(
             token_str("(", spacer()),
             array_item().star(),
-            token_str(")", spacer()),
+            token_str(")", spacer()) =>
+            |_, items, _| Literal::Array(items)
         )
-        .map3(|_, items, _| Literal::Array(items))
     }
 
     pub fn byte_literal() -> impl Parser<Literal> {
-        seq3(
+        seq!(
             token_str("#[", spacer()),
             number_literal().star(),
-            token_str("]", spacer()),
+            token_str("]", spacer()) =>
+            |_, items, _| Literal::Array(items)
         )
-        .map3(|_, items, _| Literal::Array(items))
     }
 
     fn byte_literal_array() -> impl Parser<Literal> {
-        seq3(
+        seq!(
             token_str("[", spacer()),
             number_literal().star(),
-            token_str("]", spacer()),
+            token_str("]", spacer()) =>
+            |_, items, _| Literal::Array(items)
         )
-        .map3(|_, items, _| Literal::Array(items))
     }
 
     fn literal() -> impl Parser<Literal> {
-        choice9(
+        choice!(
             number_literal(),
             string_literal(),
             character_literal(),
@@ -326,7 +347,7 @@ mod smalltalk_grammar {
     }
 
     fn assignment() -> impl Parser<String> {
-        seq2(identifier_token(), assignment_token()).map2(|name, _| name)
+        seq!(identifier_token(), assignment_token() => |name, _| name)
     }
 
     fn unary_message() -> impl Parser<(String, Vec<Node>)> {
@@ -334,11 +355,14 @@ mod smalltalk_grammar {
     }
 
     fn binary_message() -> impl Parser<(String, Vec<Node>)> {
-        seq2(binary_token(), unary_expression()).map2(|sel, arg| (sel, vec![arg]))
+        seq!(binary_token(), unary_expression() => |sel, arg| (
+            sel,
+            vec![arg]
+        ))
     }
 
     fn keyword_message() -> impl Parser<(String, Vec<Node>)> {
-        seq2(keyword_token(), binary_expression())
+        seq!(keyword_token(), binary_expression())
             .plus()
             .map(|pairs| {
                 let selector = pairs.iter().map(|(k, _)| k.clone()).collect::<String>();
@@ -348,11 +372,11 @@ mod smalltalk_grammar {
     }
 
     fn message() -> impl Parser<(String, Vec<Node>)> {
-        choice3(keyword_message(), binary_message(), unary_message())
+        choice!(keyword_message(), binary_message(), unary_message())
     }
 
     pub fn primary() -> impl Parser<Node> {
-        choice5(
+        choice!(
             literal().map(Node::Literal),
             variable(),
             block(),
@@ -362,64 +386,74 @@ mod smalltalk_grammar {
     }
 
     fn unary_expression() -> impl Parser<Node> {
-        seq2(primary(), unary_message().star()).map2(build_message)
+        seq!(primary(), unary_message().star(), => build_message)
     }
 
     fn binary_expression() -> impl Parser<Node> {
-        seq2(unary_expression(), binary_message().star()).map2(build_message)
+        seq!(unary_expression(), binary_message().star(), => build_message)
     }
 
     fn keyword_expression() -> impl Parser<Node> {
-        seq2(binary_expression(), keyword_message().opt()).map2(|receiver, part| match part {
-            Some(part) => build_message(receiver, vec![part]),
-            None => receiver,
-        })
+        seq!(
+            binary_expression(),
+            keyword_message().opt() =>
+            |receiver, part| match part {
+                Some(part) => build_message(receiver, vec![part]),
+                None => receiver,
+            }
+        )
     }
 
     fn cascade_message() -> impl Parser<(String, Vec<Node>)> {
-        seq2(token_str(";", spacer()), message()).map2(|_, part| part)
+        seq!(token_str(";", spacer()), message() => |_, part| part)
     }
 
     fn cascade_expression() -> impl Parser<Node> {
-        seq2(keyword_expression(), cascade_message().star()).map2(build_cascade)
+        seq!(keyword_expression(), cascade_message().star(), => build_cascade)
     }
 
     fn expression_return() -> impl Parser<Node> {
-        seq2(token_str("^", spacer()), expression()).map2(|_, value| Node::Return(Box::new(value)))
+        seq!(token_str("^", spacer()), expression() => |_, value| {
+            Node::Return(Box::new(value))
+        })
     }
 
     pub fn expression() -> impl Parser<Node> {
-        seq2(assignment().star(), cascade_expression())
-            .map2(|vars, value| build_assignment(value, vars))
+        seq!(assignment().star(), cascade_expression() => |vars, value| {
+            build_assignment(value, vars)
+        })
     }
 
     fn parens() -> impl Parser<Node> {
-        seq3(
+        seq!(
             token_str("(", spacer()),
             expression(),
-            token_str(")", spacer()),
+            token_str(")", spacer()) =>
+            |_, e, _| e
         )
-        .map3(|_, e, _| e)
     }
 
     fn statements() -> impl Parser<Vec<Node>> {
-        choice2(expression_return(), expression())
+        choice!(expression_return(), expression())
             .star_sep(period_token().plus(), Trailing::Allowed)
     }
 
     fn temporaries() -> impl Parser<Vec<String>> {
-        seq3(
+        seq!(
             token_str("|", spacer()),
             identifier_token().star(),
-            token_str("|", spacer()),
+            token_str("|", spacer()) =>
+            |_, vars, _| vars
         )
-        .map3(|_, vars, _| vars)
         .opt()
         .map(|vars| vars.unwrap_or_default())
     }
 
     pub fn sequence() -> impl Parser<Sequence> {
-        seq3(temporaries(), period_token().star(), statements()).map3(
+        seq!(
+            temporaries(),
+            period_token().star(),
+            statements() =>
             |temporaries, _, statements| Sequence {
                 temporaries,
                 statements,
@@ -428,24 +462,24 @@ mod smalltalk_grammar {
     }
 
     pub fn array() -> impl Parser<Node> {
-        seq3(
+        seq!(
             token_str("{", spacer()),
             expression().star_sep(period_token().plus(), Trailing::Allowed),
-            token_str("}", spacer()),
+            token_str("}", spacer()) =>
+            |_, items, _| Node::Array(items)
         )
-        .map3(|_, items, _| Node::Array(items))
     }
 
     fn block_argument() -> impl Parser<String> {
-        seq2(token_str(":", spacer()), identifier_token()).map2(|_, name| name)
+        seq!(token_str(":", spacer()), identifier_token() => |_, name| name)
     }
 
     fn block_arguments_with() -> impl Parser<Vec<String>> {
-        seq2(
+        seq!(
             block_argument().plus(),
-            choice2(token_str("|", spacer()), token_str("]", spacer()).and()),
+            choice!(token_str("|", spacer()), token_str("]", spacer()).and()) =>
+            |args, _| args
         )
-        .map2(|args, _| args)
     }
 
     fn block_arguments_without() -> impl Parser<Vec<String>> {
@@ -453,24 +487,24 @@ mod smalltalk_grammar {
     }
 
     fn block_arguments() -> impl Parser<Vec<String>> {
-        choice2(block_arguments_with(), block_arguments_without())
+        choice!(block_arguments_with(), block_arguments_without())
     }
 
     fn block_body() -> impl Parser<(Vec<String>, Sequence)> {
-        seq2(block_arguments(), sequence()).map2(|args, body| (args, body))
+        seq!(block_arguments(), sequence() => |args, body| (args, body))
     }
 
     pub fn block() -> impl Parser<Node> {
-        seq3(
+        seq!(
             token_str("[", spacer()),
             block_body(),
-            token_str("]", spacer()),
+            token_str("]", spacer()) =>
+            |_, (arguments, body), _| Node::Block { arguments, body }
         )
-        .map3(|_, (arguments, body), _| Node::Block { arguments, body })
     }
 
     fn keyword_pragma() -> impl Parser<Pragma> {
-        seq2(keyword_token(), array_item()).plus().map(|pairs| {
+        seq!(keyword_token(), array_item()).plus().map(|pairs| {
             let selector = pairs.iter().map(|(k, _)| k.clone()).collect::<String>();
             let arguments = pairs.into_iter().map(|(_, a)| a).collect();
             Pragma::new(selector, arguments)
@@ -482,20 +516,23 @@ mod smalltalk_grammar {
     }
 
     fn binary_pragma() -> impl Parser<Pragma> {
-        seq2(binary_token(), array_item()).map2(|sel, arg| Pragma::new(sel, vec![arg]))
+        seq!(binary_token(), array_item() => |sel, arg| Pragma::new(
+            sel,
+            vec![arg]
+        ))
     }
 
     fn pragma_message() -> impl Parser<Pragma> {
-        choice3(keyword_pragma(), unary_pragma(), binary_pragma())
+        choice!(keyword_pragma(), unary_pragma(), binary_pragma())
     }
 
     pub fn pragma() -> impl Parser<Pragma> {
-        seq3(
+        seq!(
             token_str("<", spacer()),
             pragma_message(),
-            token_str(">", spacer()),
+            token_str(">", spacer()) =>
+            |_, p, _| p
         )
-        .map3(|_, p, _| p)
     }
 
     fn pragmas() -> impl Parser<Vec<Pragma>> {
@@ -503,7 +540,7 @@ mod smalltalk_grammar {
     }
 
     fn keyword_method() -> impl Parser<(String, Vec<String>)> {
-        seq2(keyword_token(), identifier_token())
+        seq!(keyword_token(), identifier_token())
             .plus()
             .map(|pairs| {
                 let selector = pairs.iter().map(|(k, _)| k.clone()).collect::<String>();
@@ -517,15 +554,18 @@ mod smalltalk_grammar {
     }
 
     fn binary_method() -> impl Parser<(String, Vec<String>)> {
-        seq2(binary_token(), identifier_token()).map2(|sel, arg| (sel, vec![arg]))
+        seq!(binary_token(), identifier_token() => |sel, arg| (
+            sel,
+            vec![arg]
+        ))
     }
 
     fn method_declaration() -> impl Parser<(String, Vec<String>)> {
-        choice3(keyword_method(), unary_method(), binary_method())
+        choice!(keyword_method(), unary_method(), binary_method())
     }
 
     fn method_sequence() -> impl Parser<(Vec<Pragma>, Vec<String>, Vec<Node>)> {
-        seq8(
+        seq!(
             period_token().star(),
             pragmas(),
             period_token().star(),
@@ -533,29 +573,35 @@ mod smalltalk_grammar {
             period_token().star(),
             pragmas(),
             period_token().star(),
-            statements(),
+            statements() =>
+            |_, before, _, temporaries, _, after, _, statements| {
+                let mut pragmas: Vec<Pragma> = before;
+                pragmas.extend(after);
+                (pragmas, temporaries, statements)
+            }
         )
-        .map8(|_, before, _, temporaries, _, after, _, statements| {
-            let mut pragmas: Vec<Pragma> = before;
-            pragmas.extend(after);
-            (pragmas, temporaries, statements)
-        })
     }
 
     pub fn method() -> impl Parser<Method> {
-        seq2(method_declaration(), method_sequence()).map2(
-            |(selector, arguments), (pragmas, temporaries, statements)| {
-                Method::new(
-                    selector,
-                    arguments,
-                    pragmas,
-                    Sequence {
-                        temporaries,
-                        statements,
-                    },
-                )
-            },
-        )
+        seq!(method_declaration(), method_sequence() => |(
+            selector,
+            arguments,
+        ),
+                                                       (
+            pragmas,
+            temporaries,
+            statements,
+        )| {
+            Method::new(
+                selector,
+                arguments,
+                pragmas,
+                Sequence {
+                    temporaries,
+                    statements,
+                },
+            )
+        },)
     }
 }
 

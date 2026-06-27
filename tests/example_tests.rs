@@ -13,9 +13,9 @@ struct TestVals {
 
 impl TestVals {
     fn new() -> Self {
-        let identifier = Rc::new(seq2(letter(), word().star()).input());
+        let identifier = Rc::new(seq!(letter(), word().star()).input());
         let number = Rc::new(
-            seq3(
+            seq!(
                 char('-').opt(),
                 digit().plus(),
                 seq2(char('.'), digit().plus()).opt(),

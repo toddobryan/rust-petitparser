@@ -7,10 +7,11 @@ use crate::seq::seq_impl;
 mod choice;
 mod grammar;
 mod seq;
+mod seq_input;
 
 #[proc_macro_attribute]
 pub fn grammar(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    grammar_impl(item)
+    grammar_impl(item.into()).into()
 }
 
 #[proc_macro]

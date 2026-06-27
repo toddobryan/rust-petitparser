@@ -30,7 +30,7 @@ impl TabularDefinition {
     pub fn tsv() -> Self {
         TabularDefinition {
             quote: Rc::new(failure().map(|_| String::new())),
-            escape: Rc::new(seq!(char('\\'), any(), |_, value| match value {
+            escape: Rc::new(seq!(char('\\'), any() => |_, value| match value {
                 't' => "\t".to_string(),
                 'n' => "\n".to_string(),
                 'r' => "\r".to_string(),
@@ -56,7 +56,7 @@ impl TabularDefinition {
     }
 
     fn field(&self) -> impl Parser<String> {
-        choice2(self.quoted_field(), self.plain_field())
+        choice!(self.quoted_field(), self.plain_field())
     }
 
     fn quoted_field(&self) -> impl Parser<String> {
@@ -71,7 +71,7 @@ impl TabularDefinition {
     }
 
     fn quoted_field_char(&self) -> impl Parser<String> {
-        choice2(
+        choice!(
             self.escape.clone(),
             self.quote.clone().neg().map(|c: char| c.to_string()),
         )
@@ -88,9 +88,9 @@ impl TabularDefinition {
     }
 
     fn plain_field_char(&self) -> impl Parser<String> {
-        choice2(
+        choice!(
             self.escape.clone(),
-            choice2(self.delimiter.clone(), self.newline.clone())
+            choice!(self.delimiter.clone(), self.newline.clone())
                 .neg()
                 .map(|c: char| c.to_string()),
         )

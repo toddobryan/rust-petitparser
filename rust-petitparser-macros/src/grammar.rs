@@ -1,13 +1,19 @@
 use heck::ToUpperCamelCase;
-use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{ToTokens, quote, quote_spanned};
 use std::collections::HashSet;
-use syn::parse_macro_input;
+use syn::parse::Parser;
+use syn::punctuated::Punctuated;
 use syn::visit_mut::{self, VisitMut};
+use syn::{Expr, Token, parse2};
 
-pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
-    let module = parse_macro_input!(item as syn::ItemMod);
+use crate::seq_input::SeqInput;
+
+pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
+    let module: syn::ItemMod = match parse2(item) {
+        Ok(m) => m,
+        Err(err) => return err.to_compile_error(),
+    };
 
     let struct_name = syn::Ident::new(
         &module.ident.to_string().to_upper_camel_case(),
@@ -47,7 +53,7 @@ pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
         .map(|f| {
             let name = &f.sig.ident;
             let ty = parser_type(f);
-            quote! { let mut #name: SettableParser<#ty> = SettableParser::undefined(); }
+            quote_spanned! { f.sig.ident.span() => let mut #name: SettableParser<#ty> = SettableParser::undefined(); }
         })
         .collect();
 
@@ -56,8 +62,8 @@ pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
         .map(|f| {
             let name = &f.sig.ident;
             let stmts = &f.block.stmts;
-            quote! {
-                #name.set({ #(#stmts)* });
+            quote_spanned! {
+                f.sig.ident.span() => #name.set({ #(#stmts)* });
             }
         })
         .collect();
@@ -67,7 +73,7 @@ pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
         .map(|f| {
             let name = &f.sig.ident;
             let ty = parser_type(f);
-            quote! { #name: SettableParser<#ty> }
+            quote_spanned! { f.sig.ident.span() => #name: SettableParser<#ty> }
         })
         .collect();
 
@@ -96,11 +102,13 @@ pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
 
     let output = quote! {
         #[derive(Debug)]
+        #[allow(dead_code)]
         #mod_vis struct #struct_name {
             #(#field_decls),*
         }
 
         impl #struct_name {
+            #[allow(unused_braces)]
             #mod_vis fn new() -> Self {
                 #(#undefined_decls)*
                 #(#set_calls)*
@@ -121,7 +129,7 @@ pub(crate) fn grammar_impl(item: TokenStream) -> TokenStream {
         }
     };
 
-    output.into()
+    output
 }
 
 fn parser_type(f: &syn::ItemFn) -> &syn::Type {
@@ -171,5 +179,182 @@ impl VisitMut for ParserCallRewriter {
             return;
         }
         visit_mut::visit_expr_mut(self, expr);
+    }
+
+    fn visit_token_stream_mut(&mut self, tokens: &mut TokenStream2) {
+        // Plain comma-separated expression list — covers choice!, seq!
+        // calls with no fused map target, and any other macro whose
+        // arguments are just a list of expressions.
+        if let Ok(mut exprs) =
+            Punctuated::<Expr, Token![,]>::parse_terminated.parse2(tokens.clone())
+        {
+            for expr in &mut exprs {
+                self.visit_expr_mut(expr);
+            }
+            *tokens = exprs.to_token_stream();
+            return;
+        }
+
+        // Falls back to seq!'s fused `parsers... => target` shape, which a
+        // plain comma-list parse can't handle (the `=>` isn't a valid
+        // continuation token). Recurses into rule calls on both sides.
+        if let Ok(mut seq_input) = parse2::<SeqInput>(tokens.clone()) {
+            for expr in &mut seq_input.parsers {
+                self.visit_expr_mut(expr);
+            }
+            if let Some(target) = &mut seq_input.target {
+                self.visit_expr_mut(target);
+            }
+            *tokens = seq_input.to_token_stream();
+        }
+        // Neither shape matched — leave the tokens untouched.
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Debugging aid: render generated tokens as formatted Rust source
+    /// instead of `TokenStream`'s flat, space-everywhere `to_string()`.
+    /// Not used by the assertions themselves (those need exact token-level
+    /// spacing); call this from a test, or temporarily swap it into a
+    /// panic/`eprintln!` message, when you want to actually read the output.
+    fn pretty(tokens: &TokenStream2) -> String {
+        let file = syn::parse2(tokens.clone()).expect("output must be a valid syn::File");
+        prettyplease::unparse(&file)
+    }
+
+    /// Runs `grammar_impl` on `input` and asserts that `expected_snippet`'s
+    /// tokens appear verbatim somewhere in the (much larger) generated
+    /// struct/impl output. On failure, prints the *whole* output through
+    /// `pretty()` so you can see what actually happened instead of staring
+    /// at flat, space-everywhere token soup.
+    fn assert_rewritten(input: TokenStream2, expected_snippet: TokenStream2) {
+        let output_tokens = grammar_impl(input);
+        let output = output_tokens.to_string();
+        let expected = expected_snippet.to_string();
+        assert!(
+            output.contains(&expected),
+            "expected output to contain `{expected_snippet}`, got:\n{}",
+            pretty(&output_tokens)
+        );
+    }
+
+    #[test]
+    fn rewrites_rule_calls_inside_an_arbitrary_macro_invocation() {
+        assert_rewritten(
+            quote! {
+                mod foo {
+                    pub fn start() -> impl Parser<()> {
+                        println!("{:?}", rest());
+                        rest()
+                    }
+                    fn rest() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                }
+            },
+            quote! { println!("{:?}", rest.borrow()) },
+        );
+    }
+
+    #[test]
+    fn rewrites_rule_calls_inside_seq_used_as_a_method_call_receiver() {
+        // `seq!(...)` as the receiver of a chained `.mapN(...)` is the most
+        // common shape in this codebase's actual #[grammar] modules — and,
+        // unlike a bare `seq!(...)` tail expression, this puts the macro
+        // call in genuine `Expr::Macro` position (nested inside an
+        // `Expr::MethodCall` receiver) rather than `Stmt::Macro` position.
+        assert_rewritten(
+            quote! {
+                mod foo {
+                    pub fn start() -> impl Parser<()> {
+                        seq!(a(), b()).map2(|_, _| ())
+                    }
+                    fn a() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn b() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                }
+            },
+            quote! { seq!(a.borrow(), b.borrow()).map2(|_, _| ()) },
+        );
+    }
+
+    #[test]
+    fn rewrites_rule_calls_inside_seq_arrow_fusion() {
+        // The `=>`-fused form (`seq!(a, b => |x, y| ...)`), with a rule call
+        // buried inside the closure body — proves the rewrite recurses
+        // through the target, not just the parser-list arguments. This is
+        // also the path that requires the `SeqInput` fallback in
+        // `visit_token_stream_mut`, since a plain comma-list parse fails on
+        // the `=>` token.
+        assert_rewritten(
+            quote! {
+                mod foo {
+                    pub fn start() -> impl Parser<()> {
+                        seq!(a(), b() => |x, y| combine(x, y, c()))
+                    }
+                    fn a() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn b() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn c() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                }
+            },
+            quote! { seq!(a.borrow(), b.borrow() => |x, y| combine(x, y, c.borrow())) },
+        );
+    }
+
+    #[test]
+    fn rewrites_rule_call_used_bare_as_the_arrow_target() {
+        // The motivating case for `=>`: the target need not be a closure at
+        // all. A bare rule call as the target itself must still be rewritten.
+        assert_rewritten(
+            quote! {
+                mod foo {
+                    pub fn start() -> impl Parser<()> {
+                        seq!(a(), b() => c())
+                    }
+                    fn a() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn b() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn c() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                }
+            },
+            quote! { seq!(a.borrow(), b.borrow() => c.borrow()) },
+        );
+    }
+
+    #[test]
+    fn rewrites_rule_calls_inside_choice_macro() {
+        assert_rewritten(
+            quote! {
+                mod foo {
+                    pub fn start() -> impl Parser<()> {
+                        choice!(a(), b())
+                    }
+                    fn a() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                    fn b() -> impl Parser<()> {
+                        any().map(|_| ())
+                    }
+                }
+            },
+            quote! { choice!(a.borrow(), b.borrow()) },
+        );
     }
 }

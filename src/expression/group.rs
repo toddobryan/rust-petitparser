@@ -37,7 +37,7 @@ impl<T: Debug + 'static> ExpressionGroup<T> {
         right: impl Parser<R> + 'static,
         callback: fn(L, T, R) -> T,
     ) {
-        let p = seq!(left, self.loopback.clone(), right, move |l, t, r| {
+        let p = seq!(left, self.loopback.clone(), right => move |l, t, r| {
             callback(l, t, r)
         });
         self.wrapper.push(Rc::new(p));
@@ -208,10 +208,13 @@ fn build_postfix<T: Debug + 'static>(
     if postfix.is_empty() {
         inner
     } else {
-        Rc::new(
-            seq2(inner, choice_of(postfix.clone()).star())
-                .map2(|value, postfix| postfix.into_iter().fold(value, |acc, op| op.call(&acc))),
-        )
+        Rc::new(seq!(
+            inner,
+            choice_of(postfix.clone()).star(),
+            => |value, postfix| {
+                postfix.into_iter().fold(value, |acc, op| op.call(&acc))
+            },
+        ))
     }
 }
 

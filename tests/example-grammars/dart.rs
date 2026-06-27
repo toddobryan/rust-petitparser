@@ -12,7 +12,7 @@ where
     P: Parser<S> + Clone,
 {
     p.trim_with(spacer.clone().star(), spacer.star())
-        .map(|_| ())
+        .constant(())
 }
 
 fn token_str<S, P>(literal: &'static str, spacer: P) -> impl Parser<()>
@@ -186,114 +186,114 @@ mod dart_grammar {
     }
 
     pub fn compilation_unit() -> impl Parser<()> {
-        seq4(
+        seq!(
             hashbang_lexical_token().opt(),
             library_directive().opt(),
             import_directive().star(),
             top_level_definition().star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn library_directive() -> impl Parser<()> {
-        choice2(
-            seq3(
+        choice!(
+            seq!(
                 library_token(),
                 qualified(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 part_token(),
                 of_token(),
                 qualified(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn import_directive() -> impl Parser<()> {
-        choice3(
-            seq6(
+        choice!(
+            seq!(
                 import_token(),
                 single_line_string_lexical_token(),
                 deferred_token().opt(),
-                seq2(as_token(), identifier()).map(|_| ()).opt(),
-                seq2(
-                    choice2(show_token(), hide_token()),
+                seq!(as_token(), identifier()).constant(()).opt(),
+                seq!(
+                    choice!(show_token(), hide_token()),
                     identifier().plus_sep(
                         token_str(",", hidden_stuff_whitespace()),
                         Trailing::Disallowed,
                     ),
                 )
-                .map(|_| ())
+                .constant(())
                 .opt(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 export_token(),
                 single_line_string_lexical_token(),
-                seq2(
-                    choice2(show_token(), hide_token()),
+                seq!(
+                    choice!(show_token(), hide_token()),
                     identifier().plus_sep(
                         token_str(",", hidden_stuff_whitespace()),
                         Trailing::Disallowed,
                     ),
                 )
-                .map(|_| ())
+                .constant(())
                 .opt(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 part_token(),
                 single_line_string_lexical_token(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn top_level_definition() -> impl Parser<()> {
-        choice7(
+        choice!(
             class_definition(),
             function_type_alias(),
-            seq2(function_declaration(), function_body_or_native()).map(|_| ()),
-            seq5(
+            seq!(function_declaration(), function_body_or_native()).constant(()),
+            seq!(
                 return_type().opt(),
                 get_or_set(),
                 identifier(),
                 formal_parameter_list(),
                 function_body_or_native(),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 final_token(),
                 dart_type().opt(),
                 static_final_declaration_list(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 const_token(),
                 dart_type().opt(),
                 static_final_declaration_list(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 const_initialized_variable_declaration(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn class_definition() -> impl Parser<()> {
-        choice2(
-            seq9(
+        choice!(
+            seq!(
                 abstract_token().opt(),
                 class_token(),
                 identifier(),
@@ -304,277 +304,277 @@ mod dart_grammar {
                 class_member_definition().star(),
                 token_str("}", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq2(
-                seq5(
+            .constant(()),
+            seq!(
+                seq!(
                     abstract_token().opt(),
                     class_token(),
                     identifier(),
                     type_parameters().opt(),
                     interfaces().opt(),
                 )
-                .map(|_| ()),
-                seq5(
+                .constant(()),
+                seq!(
                     native_token(),
                     token_parser(string_lexical_token(), hidden_stuff_whitespace()),
                     token_str("{", hidden_stuff_whitespace()),
                     class_member_definition().star(),
                     token_str("}", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
+                .constant(()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn type_parameter() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            seq2(extends_token(), dart_type()).map(|_| ()).opt(),
+            seq!(extends_token(), dart_type()).constant(()).opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn type_parameters() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("<", hidden_stuff_whitespace()),
             type_parameter(),
-            seq2(token_str(",", hidden_stuff_whitespace()), type_parameter())
-                .map(|_| ())
+            seq!(token_str(",", hidden_stuff_whitespace()), type_parameter())
+                .constant(())
                 .star(),
             token_str(">", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn superclass() -> impl Parser<()> {
-        seq2(extends_token(), dart_type()).map(|_| ())
+        seq!(extends_token(), dart_type()).constant(())
     }
 
     pub fn interfaces() -> impl Parser<()> {
-        seq2(implements_token(), type_list()).map(|_| ())
+        seq!(implements_token(), type_list()).constant(())
     }
 
     // This rule is organized in a way that may not be most readable, but
     // gives the best error messages.
     pub fn class_member_definition() -> impl Parser<()> {
-        choice4(
-            seq2(declaration(), token_str(";", hidden_stuff_whitespace())).map(|_| ()),
-            seq2(
+        choice!(
+            seq!(declaration(), token_str(";", hidden_stuff_whitespace())).constant(()),
+            seq!(
                 constructor_declaration(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq2(method_declaration(), function_body_or_native()).map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(method_declaration(), function_body_or_native()).constant(()),
+            seq!(
                 const_token(),
                 factory_constructor_declaration(),
                 function_native(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn function_body_or_native() -> impl Parser<()> {
-        choice3(
-            seq2(native_token(), function_body()).map(|_| ()),
+        choice!(
+            seq!(native_token(), function_body()).constant(()),
             function_native(),
             function_body(),
         )
     }
 
     pub fn function_native() -> impl Parser<()> {
-        seq3(
+        seq!(
             native_token(),
             token_parser(string_lexical_token(), hidden_stuff_whitespace()).opt(),
             token_str(";", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     // A method, operator, or constructor (which all should be followed by
     // a block of code).
     pub fn method_declaration() -> impl Parser<()> {
-        choice5(
+        choice!(
             factory_constructor_declaration(),
-            seq2(static_token(), function_declaration()).map(|_| ()),
+            seq!(static_token(), function_declaration()).constant(()),
             special_signature_definition(),
-            seq2(function_declaration(), initializers().opt()).map(|_| ()),
-            seq2(named_constructor_declaration(), initializers().opt()).map(|_| ()),
+            seq!(function_declaration(), initializers().opt()).constant(()),
+            seq!(named_constructor_declaration(), initializers().opt()).constant(()),
         )
     }
 
     // An abstract method/operator, a field, or const constructor (which
     // all should be followed by a semicolon).
     pub fn declaration() -> impl Parser<()> {
-        choice6(
-            seq2(function_declaration(), redirection()).map(|_| ()),
-            seq2(named_constructor_declaration(), redirection()).map(|_| ()),
-            seq2(abstract_token(), special_signature_definition()).map(|_| ()),
-            seq2(abstract_token(), function_declaration()).map(|_| ()),
-            seq4(
+        choice!(
+            seq!(function_declaration(), redirection()).constant(()),
+            seq!(named_constructor_declaration(), redirection()).constant(()),
+            seq!(abstract_token(), special_signature_definition()).constant(()),
+            seq!(abstract_token(), function_declaration()).constant(()),
+            seq!(
                 static_token(),
                 final_token(),
                 dart_type().opt(),
                 static_final_declaration_list(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 static_token().opt(),
                 const_initialized_variable_declaration(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn initializers() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str(":", hidden_stuff_whitespace()),
             super_call_or_field_initializer(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 super_call_or_field_initializer(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn redirection() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str(":", hidden_stuff_whitespace()),
             this_token(),
-            seq2(token_str(".", hidden_stuff_whitespace()), identifier())
-                .map(|_| ())
+            seq!(token_str(".", hidden_stuff_whitespace()), identifier())
+                .constant(())
                 .opt(),
             arguments(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn field_initializer() -> impl Parser<()> {
-        seq4(
-            seq2(this_token(), token_str(".", hidden_stuff_whitespace()))
-                .map(|_| ())
+        seq!(
+            seq!(this_token(), token_str(".", hidden_stuff_whitespace()))
+                .constant(())
                 .opt(),
             identifier(),
             token_str("=", hidden_stuff_whitespace()),
             conditional_expression(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn super_call_or_field_initializer() -> impl Parser<()> {
-        choice3(
-            seq2(super_token(), arguments()).map(|_| ()),
-            seq4(
+        choice!(
+            seq!(super_token(), arguments()).constant(()),
+            seq!(
                 super_token(),
                 token_str(".", hidden_stuff_whitespace()),
                 identifier(),
                 arguments(),
             )
-            .map(|_| ()),
+            .constant(()),
             field_initializer(),
         )
     }
 
     pub fn static_final_declaration_list() -> impl Parser<()> {
-        seq2(
+        seq!(
             static_final_declaration(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 static_final_declaration(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn static_final_declaration() -> impl Parser<()> {
-        seq3(
+        seq!(
             identifier(),
             token_str("=", hidden_stuff_whitespace()),
             constant_expression(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn function_type_alias() -> impl Parser<()> {
-        seq5(
+        seq!(
             typedef_token(),
             function_prefix(),
             type_parameters().opt(),
             formal_parameter_list(),
             token_str(";", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn factory_constructor_declaration() -> impl Parser<()> {
-        seq5(
+        seq!(
             factory_token(),
             qualified(),
             type_parameters().opt(),
-            seq2(token_str(".", hidden_stuff_whitespace()), identifier())
-                .map(|_| ())
+            seq!(token_str(".", hidden_stuff_whitespace()), identifier())
+                .constant(())
                 .opt(),
             formal_parameter_list(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn constructor_declaration() -> impl Parser<()> {
-        choice2(
-            seq4(
+        choice!(
+            seq!(
                 const_token().opt(),
                 identifier(),
                 formal_parameter_list(),
-                choice2(redirection(), initializers()).opt(),
+                choice!(redirection(), initializers()).opt(),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 const_token().opt(),
                 named_constructor_declaration(),
-                choice2(redirection(), initializers()).opt(),
+                choice!(redirection(), initializers()).opt(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn named_constructor_declaration() -> impl Parser<()> {
-        seq4(
+        seq!(
             identifier(),
             token_str(".", hidden_stuff_whitespace()),
             identifier(),
             formal_parameter_list(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn special_signature_definition() -> impl Parser<()> {
-        choice2(
-            seq5(
+        choice!(
+            seq!(
                 static_token().opt(),
                 return_type().opt(),
                 get_or_set(),
                 identifier(),
                 formal_parameter_list(),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 return_type().opt(),
                 operator_token(),
                 user_definable_operator(),
                 formal_parameter_list(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn get_or_set() -> impl Parser<()> {
-        choice2(get_token(), set_token())
+        choice!(get_token(), set_token())
     }
 
     pub fn user_definable_operator() -> impl Parser<()> {
@@ -587,22 +587,22 @@ mod dart_grammar {
             token_str("==", hidden_stuff_whitespace()),
             token_str("~", hidden_stuff_whitespace()),
             negate_token(),
-            seq2(
+            seq!(
                 token_str("[", hidden_stuff_whitespace()),
                 token_str("]", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 token_str("[", hidden_stuff_whitespace()),
                 token_str("]", hidden_stuff_whitespace()),
                 token_str("=", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn prefix_operator() -> impl Parser<()> {
-        choice2(additive_operator(), negate_operator())
+        choice!(additive_operator(), negate_operator())
     }
 
     pub fn postfix_operator() -> impl Parser<()> {
@@ -610,14 +610,14 @@ mod dart_grammar {
     }
 
     pub fn negate_operator() -> impl Parser<()> {
-        choice2(
+        choice!(
             token_str("!", hidden_stuff_whitespace()),
             token_str("~", hidden_stuff_whitespace()),
         )
     }
 
     pub fn multiplicative_operator() -> impl Parser<()> {
-        choice4(
+        choice!(
             token_str("*", hidden_stuff_whitespace()),
             token_str("/", hidden_stuff_whitespace()),
             token_str("%", hidden_stuff_whitespace()),
@@ -626,8 +626,8 @@ mod dart_grammar {
     }
 
     pub fn assignment_operator() -> impl Parser<()> {
-        choice2(
-            choice7(
+        choice!(
+            choice!(
                 token_str("=", hidden_stuff_whitespace()),
                 token_str("*=", hidden_stuff_whitespace()),
                 token_str("/=", hidden_stuff_whitespace()),
@@ -636,7 +636,7 @@ mod dart_grammar {
                 token_str("+=", hidden_stuff_whitespace()),
                 token_str("-=", hidden_stuff_whitespace()),
             ),
-            choice6(
+            choice!(
                 token_str("<<=", hidden_stuff_whitespace()),
                 token_str(">>>=", hidden_stuff_whitespace()),
                 token_str(">>=", hidden_stuff_whitespace()),
@@ -648,21 +648,21 @@ mod dart_grammar {
     }
 
     pub fn additive_operator() -> impl Parser<()> {
-        choice2(
+        choice!(
             token_str("+", hidden_stuff_whitespace()),
             token_str("-", hidden_stuff_whitespace()),
         )
     }
 
     pub fn increment_operator() -> impl Parser<()> {
-        choice2(
+        choice!(
             token_str("++", hidden_stuff_whitespace()),
             token_str("--", hidden_stuff_whitespace()),
         )
     }
 
     pub fn shift_operator() -> impl Parser<()> {
-        choice3(
+        choice!(
             token_str("<<", hidden_stuff_whitespace()),
             token_str(">>>", hidden_stuff_whitespace()),
             token_str(">>", hidden_stuff_whitespace()),
@@ -670,7 +670,7 @@ mod dart_grammar {
     }
 
     pub fn relational_operator() -> impl Parser<()> {
-        choice4(
+        choice!(
             token_str(">=", hidden_stuff_whitespace()),
             token_str(">", hidden_stuff_whitespace()),
             token_str("<=", hidden_stuff_whitespace()),
@@ -679,7 +679,7 @@ mod dart_grammar {
     }
 
     pub fn equality_operator() -> impl Parser<()> {
-        choice4(
+        choice!(
             token_str("===", hidden_stuff_whitespace()),
             token_str("!==", hidden_stuff_whitespace()),
             token_str("==", hidden_stuff_whitespace()),
@@ -688,7 +688,7 @@ mod dart_grammar {
     }
 
     pub fn bitwise_operator() -> impl Parser<()> {
-        choice3(
+        choice!(
             token_str("&", hidden_stuff_whitespace()),
             token_str("^", hidden_stuff_whitespace()),
             token_str("|", hidden_stuff_whitespace()),
@@ -696,52 +696,52 @@ mod dart_grammar {
     }
 
     pub fn formal_parameter_list() -> impl Parser<()> {
-        choice3(
-            seq3(
+        choice!(
+            seq!(
                 token_str("(", hidden_stuff_whitespace()),
                 optional_formal_parameters().opt(),
                 token_str(")", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 token_str("(", hidden_stuff_whitespace()),
                 named_formal_parameters().opt(),
                 token_str(")", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq4(
+            .constant(()),
+            seq!(
                 token_str("(", hidden_stuff_whitespace()),
                 normal_formal_parameter(),
                 normal_formal_parameter_tail().opt(),
                 token_str(")", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn normal_formal_parameter_tail() -> impl Parser<()> {
-        choice3(
-            seq2(
+        choice!(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 optional_formal_parameters(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 named_formal_parameters(),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 normal_formal_parameter(),
                 normal_formal_parameter_tail().opt(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn normal_formal_parameter() -> impl Parser<()> {
-        choice3(
+        choice!(
             field_formal_parameter(),
             function_declaration(),
             simple_formal_parameter(),
@@ -749,76 +749,76 @@ mod dart_grammar {
     }
 
     pub fn simple_formal_parameter() -> impl Parser<()> {
-        choice2(declared_identifier(), identifier())
+        choice!(declared_identifier(), identifier())
     }
 
     pub fn field_formal_parameter() -> impl Parser<()> {
-        seq3(
+        seq!(
             this_token(),
             token_str(".", hidden_stuff_whitespace()),
             identifier(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn optional_formal_parameters() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("[", hidden_stuff_whitespace()),
             default_formal_parameter(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 default_formal_parameter(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
             token_str("]", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn named_formal_parameters() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("{", hidden_stuff_whitespace()),
             named_format_parameter(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 named_format_parameter(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
             token_str("}", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn named_format_parameter() -> impl Parser<()> {
-        seq2(
+        seq!(
             normal_formal_parameter(),
-            seq2(
+            seq!(
                 token_str(":", hidden_stuff_whitespace()),
                 constant_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn default_formal_parameter() -> impl Parser<()> {
-        seq2(
+        seq!(
             normal_formal_parameter(),
-            seq2(
+            seq!(
                 token_str("=", hidden_stuff_whitespace()),
                 constant_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn return_type() -> impl Parser<()> {
-        choice2(void_token(), dart_type())
+        choice!(void_token(), dart_type())
     }
 
     // We have to introduce a separate rule for 'declared' identifiers to
@@ -826,10 +826,10 @@ mod dart_grammar {
     // final is a type or an identifier. Before this change, we used the
     // production 'finalVarOrType identifier' in numerous places.
     pub fn declared_identifier() -> impl Parser<()> {
-        choice3(
-            seq3(final_token(), dart_type().opt(), identifier()).map(|_| ()),
-            seq2(var_token(), identifier()).map(|_| ()),
-            seq2(dart_type(), identifier()).map(|_| ()),
+        choice!(
+            seq!(final_token(), dart_type().opt(), identifier()).constant(()),
+            seq!(var_token(), identifier()).constant(()),
+            seq!(dart_type(), identifier()).constant(()),
         )
     }
 
@@ -838,127 +838,127 @@ mod dart_grammar {
     }
 
     pub fn qualified() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            seq2(token_str(".", hidden_stuff_whitespace()), identifier())
-                .map(|_| ())
+            seq!(token_str(".", hidden_stuff_whitespace()), identifier())
+                .constant(())
                 .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     // Dart names this rule `type`, but `type` is a Rust keyword.
     pub fn dart_type() -> impl Parser<()> {
-        seq2(qualified(), type_arguments().opt()).map(|_| ())
+        seq!(qualified(), type_arguments().opt()).constant(())
     }
 
     pub fn type_arguments() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("<", hidden_stuff_whitespace()),
             type_list(),
             token_str(">", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn type_list() -> impl Parser<()> {
-        seq2(
+        seq!(
             dart_type(),
-            seq2(token_str(",", hidden_stuff_whitespace()), dart_type())
-                .map(|_| ())
+            seq!(token_str(",", hidden_stuff_whitespace()), dart_type())
+                .constant(())
                 .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("{", hidden_stuff_whitespace()),
             statements(),
             token_str("}", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statements() -> impl Parser<()> {
-        statement().star().map(|_| ())
+        statement().star().constant(())
     }
 
     pub fn statement() -> impl Parser<()> {
-        seq2(label().star(), non_labelled_statement()).map(|_| ())
+        seq!(label().star(), non_labelled_statement()).constant(())
     }
 
     pub fn non_labelled_statement() -> impl Parser<()> {
-        choice2(
-            choice6(
+        choice!(
+            choice!(
                 block(),
-                seq2(
+                seq!(
                     initialized_variable_declaration(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
+                .constant(()),
                 iteration_statement(),
                 selection_statement(),
                 try_statement(),
-                seq3(
+                seq!(
                     break_token(),
                     identifier().opt(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
+                .constant(()),
             ),
-            choice6(
-                seq3(
+            choice!(
+                seq!(
                     continue_token(),
                     identifier().opt(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
-                seq3(
+                .constant(()),
+                seq!(
                     return_token(),
                     expression().opt(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
-                seq3(
+                .constant(()),
+                seq!(
                     throw_token(),
                     expression().opt(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
-                seq2(
+                .constant(()),
+                seq!(
                     expression().opt(),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
-                seq5(
+                .constant(()),
+                seq!(
                     assert_token(),
                     token_str("(", hidden_stuff_whitespace()),
                     conditional_expression(),
                     token_str(")", hidden_stuff_whitespace()),
                     token_str(";", hidden_stuff_whitespace()),
                 )
-                .map(|_| ()),
-                seq2(function_declaration(), function_body()).map(|_| ()),
+                .constant(()),
+                seq!(function_declaration(), function_body()).constant(()),
             ),
         )
     }
 
     pub fn label() -> impl Parser<()> {
-        seq2(identifier(), token_str(":", hidden_stuff_whitespace())).map(|_| ())
+        seq!(identifier(), token_str(":", hidden_stuff_whitespace())).constant(())
     }
 
     pub fn iteration_statement() -> impl Parser<()> {
-        choice3(
-            seq5(
+        choice!(
+            seq!(
                 while_token(),
                 token_str("(", hidden_stuff_whitespace()),
                 expression(),
                 token_str(")", hidden_stuff_whitespace()),
                 statement(),
             )
-            .map(|_| ()),
-            seq7(
+            .constant(()),
+            seq!(
                 do_token(),
                 statement(),
                 while_token(),
@@ -967,59 +967,59 @@ mod dart_grammar {
                 token_str(")", hidden_stuff_whitespace()),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq5(
+            .constant(()),
+            seq!(
                 for_token(),
                 token_str("(", hidden_stuff_whitespace()),
                 for_loop_parts(),
                 token_str(")", hidden_stuff_whitespace()),
                 statement(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn for_loop_parts() -> impl Parser<()> {
-        choice3(
-            seq4(
+        choice!(
+            seq!(
                 for_initializer_statement(),
                 expression().opt(),
                 token_str(";", hidden_stuff_whitespace()),
                 expression_list().opt(),
             )
-            .map(|_| ()),
-            seq3(declared_identifier(), in_token(), expression()).map(|_| ()),
-            seq3(identifier(), in_token(), expression()).map(|_| ()),
+            .constant(()),
+            seq!(declared_identifier(), in_token(), expression()).constant(()),
+            seq!(identifier(), in_token(), expression()).constant(()),
         )
     }
 
     pub fn for_initializer_statement() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 initialized_variable_declaration(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 expression().opt(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn selection_statement() -> impl Parser<()> {
-        choice2(
-            seq6(
+        choice!(
+            seq!(
                 if_token(),
                 token_str("(", hidden_stuff_whitespace()),
                 expression(),
                 token_str(")", hidden_stuff_whitespace()),
                 statement(),
-                seq2(else_token(), statement()).map(|_| ()).opt(),
+                seq!(else_token(), statement()).constant(()).opt(),
             )
-            .map(|_| ()),
-            seq8(
+            .constant(()),
+            seq!(
                 switch_token(),
                 token_str("(", hidden_stuff_whitespace()),
                 expression(),
@@ -1029,124 +1029,124 @@ mod dart_grammar {
                 default_case().opt(),
                 token_str("}", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn switch_case() -> impl Parser<()> {
-        seq3(
+        seq!(
             label().opt(),
-            seq3(
+            seq!(
                 case_token(),
                 expression(),
                 token_str(":", hidden_stuff_whitespace()),
             )
-            .map(|_| ())
+            .constant(())
             .plus(),
             statements(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn default_case() -> impl Parser<()> {
-        seq4(
+        seq!(
             label().opt(),
             default_token(),
             token_str(":", hidden_stuff_whitespace()),
             statements(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn try_statement() -> impl Parser<()> {
-        seq3(
+        seq!(
             try_token(),
             block(),
-            choice2(
-                seq2(catch_part().plus(), finally_part().opt()).map(|_| ()),
+            choice!(
+                seq!(catch_part().plus(), finally_part().opt()).constant(()),
                 finally_part(),
             ),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn catch_part() -> impl Parser<()> {
-        seq6(
+        seq!(
             catch_token(),
             token_str("(", hidden_stuff_whitespace()),
             declared_identifier(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 declared_identifier(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
             token_str(")", hidden_stuff_whitespace()),
             block(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn finally_part() -> impl Parser<()> {
-        seq2(finally_token(), block()).map(|_| ())
+        seq!(finally_token(), block()).constant(())
     }
 
     pub fn initialized_variable_declaration() -> impl Parser<()> {
-        seq3(
+        seq!(
             declared_identifier(),
-            seq2(token_str("=", hidden_stuff_whitespace()), expression())
-                .map(|_| ())
+            seq!(token_str("=", hidden_stuff_whitespace()), expression())
+                .constant(())
                 .opt(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 initialized_identifier(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn initialized_identifier() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            seq2(token_str("=", hidden_stuff_whitespace()), expression())
-                .map(|_| ())
+            seq!(token_str("=", hidden_stuff_whitespace()), expression())
+                .constant(())
                 .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn const_initialized_variable_declaration() -> impl Parser<()> {
-        seq3(
+        seq!(
             declared_identifier(),
-            seq2(
+            seq!(
                 token_str("=", hidden_stuff_whitespace()),
                 constant_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
-            seq2(
+            seq!(
                 token_str(",", hidden_stuff_whitespace()),
                 const_initialized_identifier(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn const_initialized_identifier() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            seq2(
+            seq!(
                 token_str("=", hidden_stuff_whitespace()),
                 constant_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     // The constant expression production is used to mark certain expressions
@@ -1158,8 +1158,8 @@ mod dart_grammar {
     }
 
     pub fn expression() -> impl Parser<()> {
-        choice2(
-            seq3(assignable_expression(), assignment_operator(), expression()).map(|_| ()),
+        choice!(
+            seq!(assignable_expression(), assignment_operator(), expression()).constant(()),
             conditional_expression(),
         )
     }
@@ -1170,18 +1170,18 @@ mod dart_grammar {
                 token_str(",", hidden_stuff_whitespace()),
                 Trailing::Disallowed,
             )
-            .map(|_| ())
+            .constant(())
     }
 
     pub fn arguments() -> impl Parser<()> {
-        seq5(
+        seq!(
             token_str("(", hidden_stuff_whitespace()),
             argument_list().opt(),
             token_str(",", hidden_stuff_whitespace()).opt(),
             token_str(")", hidden_stuff_whitespace()),
             null_safety_annotations().opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn argument_list() -> impl Parser<()> {
@@ -1190,299 +1190,299 @@ mod dart_grammar {
                 token_str(",", hidden_stuff_whitespace()),
                 Trailing::Disallowed,
             )
-            .map(|_| ())
+            .constant(())
     }
 
     pub fn argument_element() -> impl Parser<()> {
-        choice2(seq2(label(), expression()).map(|_| ()), expression())
+        choice!(seq!(label(), expression()).constant(()), expression())
     }
 
     pub fn assignable_expression() -> impl Parser<()> {
-        choice3(
-            seq2(
+        choice!(
+            seq!(
                 primary(),
-                seq2(arguments().star(), assignable_selector())
-                    .map(|_| ())
+                seq!(arguments().star(), assignable_selector())
+                    .constant(())
                     .plus(),
             )
-            .map(|_| ()),
-            seq2(super_token(), assignable_selector()).map(|_| ()),
+            .constant(()),
+            seq!(super_token(), assignable_selector()).constant(()),
             identifier(),
         )
     }
 
     pub fn conditional_expression() -> impl Parser<()> {
-        seq2(
+        seq!(
             logical_or_expression(),
-            seq4(
+            seq!(
                 token_str("?", hidden_stuff_whitespace()),
                 expression(),
                 token_str(":", hidden_stuff_whitespace()),
                 expression(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn logical_or_expression() -> impl Parser<()> {
-        seq2(
+        seq!(
             logical_and_expression(),
-            seq2(
+            seq!(
                 token_str("||", hidden_stuff_whitespace()),
                 logical_and_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn logical_and_expression() -> impl Parser<()> {
-        seq2(
+        seq!(
             bitwise_or_expression(),
-            seq2(
+            seq!(
                 token_str("&&", hidden_stuff_whitespace()),
                 bitwise_or_expression(),
             )
-            .map(|_| ())
+            .constant(())
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn bitwise_or_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 bitwise_xor_expression(),
-                seq2(
+                seq!(
                     token_str("|", hidden_stuff_whitespace()),
                     bitwise_xor_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(
+                seq!(
                     token_str("|", hidden_stuff_whitespace()),
                     bitwise_xor_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn bitwise_xor_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 bitwise_and_expression(),
-                seq2(
+                seq!(
                     token_str("^", hidden_stuff_whitespace()),
                     bitwise_and_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(
+                seq!(
                     token_str("^", hidden_stuff_whitespace()),
                     bitwise_and_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn bitwise_and_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 equality_expression(),
-                seq2(
+                seq!(
                     token_str("&", hidden_stuff_whitespace()),
                     equality_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(
+                seq!(
                     token_str("&", hidden_stuff_whitespace()),
                     equality_expression(),
                 )
-                .map(|_| ())
+                .constant(())
                 .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn equality_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 relational_expression(),
-                seq2(equality_operator(), relational_expression())
-                    .map(|_| ())
+                seq!(equality_operator(), relational_expression())
+                    .constant(())
                     .opt(),
             )
-            .map(|_| ()),
-            seq3(super_token(), equality_operator(), relational_expression()).map(|_| ()),
+            .constant(()),
+            seq!(super_token(), equality_operator(), relational_expression()).constant(()),
         )
     }
 
     pub fn relational_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 shift_expression(),
-                choice2(
-                    seq2(is_operator(), dart_type()).map(|_| ()),
-                    seq2(relational_operator(), shift_expression()).map(|_| ()),
+                choice!(
+                    seq!(is_operator(), dart_type()).constant(()),
+                    seq!(relational_operator(), shift_expression()).constant(()),
                 )
                 .opt(),
             )
-            .map(|_| ()),
-            seq3(super_token(), relational_operator(), shift_expression()).map(|_| ()),
+            .constant(()),
+            seq!(super_token(), relational_operator(), shift_expression()).constant(()),
         )
     }
 
     pub fn is_operator() -> impl Parser<()> {
-        seq2(is_token(), token_str("!", hidden_stuff_whitespace()).opt()).map(|_| ())
+        seq!(is_token(), token_str("!", hidden_stuff_whitespace()).opt()).constant(())
     }
 
     pub fn shift_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 additive_expression(),
-                seq2(shift_operator(), additive_expression())
-                    .map(|_| ())
+                seq!(shift_operator(), additive_expression())
+                    .constant(())
                     .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(shift_operator(), additive_expression())
-                    .map(|_| ())
+                seq!(shift_operator(), additive_expression())
+                    .constant(())
                     .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn additive_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 multiplicative_expression(),
-                seq2(additive_operator(), multiplicative_expression())
-                    .map(|_| ())
+                seq!(additive_operator(), multiplicative_expression())
+                    .constant(())
                     .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(additive_operator(), multiplicative_expression())
-                    .map(|_| ())
+                seq!(additive_operator(), multiplicative_expression())
+                    .constant(())
                     .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn multiplicative_expression() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 unary_expression(),
-                seq2(multiplicative_operator(), unary_expression())
-                    .map(|_| ())
+                seq!(multiplicative_operator(), unary_expression())
+                    .constant(())
                     .star(),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 super_token(),
-                seq2(multiplicative_operator(), unary_expression())
-                    .map(|_| ())
+                seq!(multiplicative_operator(), unary_expression())
+                    .constant(())
                     .plus(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn unary_expression() -> impl Parser<()> {
-        choice5(
+        choice!(
             postfix_expression(),
-            seq2(prefix_operator(), unary_expression()).map(|_| ()),
-            seq2(negate_operator(), super_token()).map(|_| ()),
-            seq2(token_str("-", hidden_stuff_whitespace()), super_token()).map(|_| ()),
-            seq2(increment_operator(), assignable_expression()).map(|_| ()),
+            seq!(prefix_operator(), unary_expression()).constant(()),
+            seq!(negate_operator(), super_token()).constant(()),
+            seq!(token_str("-", hidden_stuff_whitespace()), super_token()).constant(()),
+            seq!(increment_operator(), assignable_expression()).constant(()),
         )
     }
 
     pub fn postfix_expression() -> impl Parser<()> {
-        choice2(
-            seq2(assignable_expression(), postfix_operator()).map(|_| ()),
-            seq2(primary(), selector().star()).map(|_| ()),
+        choice!(
+            seq!(assignable_expression(), postfix_operator()).constant(()),
+            seq!(primary(), selector().star()).constant(()),
         )
     }
 
     pub fn selector() -> impl Parser<()> {
-        choice2(
-            seq2(null_safety_annotations().opt(), assignable_selector()).map(|_| ()),
+        choice!(
+            seq!(null_safety_annotations().opt(), assignable_selector()).constant(()),
             arguments(),
         )
     }
 
     pub fn null_safety_annotations() -> impl Parser<()> {
-        choice2(
+        choice!(
             token_str("?", hidden_stuff_whitespace()),
             token_str("!", hidden_stuff_whitespace()),
         )
     }
 
     pub fn assignable_selector() -> impl Parser<()> {
-        choice2(
-            seq3(
+        choice!(
+            seq!(
                 token_str("[", hidden_stuff_whitespace()),
                 expression(),
                 token_str("]", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 token_str(".", hidden_stuff_whitespace()),
                 identifier(),
                 null_safety_annotations().opt(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn primary() -> impl Parser<()> {
-        choice8(
+        choice!(
             this_token(),
-            seq2(super_token(), assignable_selector()).map(|_| ()),
-            seq3(
+            seq!(super_token(), assignable_selector()).constant(()),
+            seq!(
                 const_token().opt(),
                 type_arguments().opt(),
                 compound_literal(),
             )
-            .map(|_| ()),
-            seq4(
-                choice2(new_token(), const_token()),
+            .constant(()),
+            seq!(
+                choice!(new_token(), const_token()),
                 dart_type(),
-                seq2(token_str(".", hidden_stuff_whitespace()), identifier())
-                    .map(|_| ())
+                seq!(token_str(".", hidden_stuff_whitespace()), identifier())
+                    .constant(())
                     .opt(),
                 arguments(),
             )
-            .map(|_| ()),
+            .constant(()),
             function_expression(),
             expression_in_parentheses(),
             literal(),
@@ -1491,17 +1491,17 @@ mod dart_grammar {
     }
 
     pub fn expression_in_parentheses() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("(", hidden_stuff_whitespace()),
             expression(),
             token_str(")", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn literal() -> impl Parser<()> {
         token_parser(
-            choice6(
+            choice!(
                 null_token(),
                 true_token(),
                 false_token(),
@@ -1514,88 +1514,88 @@ mod dart_grammar {
     }
 
     pub fn compound_literal() -> impl Parser<()> {
-        choice2(list_literal(), map_literal())
+        choice!(list_literal(), map_literal())
     }
 
     pub fn list_literal() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("[", hidden_stuff_whitespace()),
-            seq2(
+            seq!(
                 expression_list(),
                 token_str(",", hidden_stuff_whitespace()).opt(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
             token_str("]", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn map_literal() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("{", hidden_stuff_whitespace()),
-            seq3(
+            seq!(
                 map_literal_entry(),
-                seq2(
+                seq!(
                     token_str(",", hidden_stuff_whitespace()),
                     map_literal_entry(),
                 )
-                .map(|_| ())
+                .constant(())
                 .star(),
                 token_str(",", hidden_stuff_whitespace()).opt(),
             )
-            .map(|_| ())
+            .constant(())
             .opt(),
             token_str("}", hidden_stuff_whitespace()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn map_literal_entry() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_parser(string_lexical_token(), hidden_stuff_whitespace()),
             token_str(":", hidden_stuff_whitespace()),
             expression(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn function_expression() -> impl Parser<()> {
-        seq4(
+        seq!(
             return_type().opt(),
             identifier().opt(),
             formal_parameter_list(),
             function_expression_body(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn function_declaration() -> impl Parser<()> {
-        choice2(
-            seq3(return_type(), identifier(), formal_parameter_list()).map(|_| ()),
-            seq2(identifier(), formal_parameter_list()).map(|_| ()),
+        choice!(
+            seq!(return_type(), identifier(), formal_parameter_list()).constant(()),
+            seq!(identifier(), formal_parameter_list()).constant(()),
         )
     }
 
     pub fn function_prefix() -> impl Parser<()> {
-        seq2(return_type().opt(), identifier()).map(|_| ())
+        seq!(return_type().opt(), identifier()).constant(())
     }
 
     pub fn function_body() -> impl Parser<()> {
-        choice2(
-            seq3(
+        choice!(
+            seq!(
                 token_str("=>", hidden_stuff_whitespace()),
                 expression(),
                 token_str(";", hidden_stuff_whitespace()),
             )
-            .map(|_| ()),
+            .constant(()),
             block(),
         )
     }
 
     pub fn function_expression_body() -> impl Parser<()> {
-        choice2(
-            seq2(token_str("=>", hidden_stuff_whitespace()), expression()).map(|_| ()),
+        choice!(
+            seq!(token_str("=>", hidden_stuff_whitespace()), expression()).constant(()),
             block(),
         )
     }
@@ -1604,42 +1604,42 @@ mod dart_grammar {
     // Lexical tokens.
     // -----------------------------------------------------------------
     pub fn identifier_lexical_token() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier_start_lexical_token(),
             identifier_part_lexical_token().star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn hex_number_lexical_token() -> impl Parser<()> {
-        choice2(
-            seq2(string("0x").map(|_| ()), hex_digit_lexical_token().plus()).map(|_| ()),
-            seq2(string("0X").map(|_| ()), hex_digit_lexical_token().plus()).map(|_| ()),
+        choice!(
+            seq!(string("0x").constant(()), hex_digit_lexical_token().plus()).constant(()),
+            seq!(string("0X").constant(()), hex_digit_lexical_token().plus()).constant(()),
         )
     }
 
     pub fn number_lexical_token() -> impl Parser<()> {
-        choice2(
-            seq4(
+        choice!(
+            seq!(
                 digit_lexical_token().plus(),
                 number_opt_fractional_part_lexical_token(),
                 exponent_lexical_token().opt(),
                 number_opt_illegal_end_lexical_token(),
             )
-            .map(|_| ()),
-            seq4(
-                char('.').map(|_| ()),
+            .constant(()),
+            seq!(
+                char('.').constant(()),
                 digit_lexical_token().plus(),
                 exponent_lexical_token().opt(),
                 number_opt_illegal_end_lexical_token(),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn number_opt_fractional_part_lexical_token() -> impl Parser<()> {
-        choice2(
-            seq2(char('.').map(|_| ()), digit_lexical_token().plus()).map(|_| ()),
+        choice!(
+            seq!(char('.').constant(()), digit_lexical_token().plus()).constant(()),
             epsilon(),
         )
     }
@@ -1649,130 +1649,130 @@ mod dart_grammar {
     }
 
     pub fn hex_digit_lexical_token() -> impl Parser<()> {
-        pattern("0-9a-fA-F").map(|_| ())
+        pattern("0-9a-fA-F").constant(())
     }
 
     pub fn identifier_start_lexical_token() -> impl Parser<()> {
-        choice2(
+        choice!(
             identifier_start_no_dollar_lexical_token(),
-            char('$').map(|_| ()),
+            char('$').constant(()),
         )
     }
 
     pub fn identifier_start_no_dollar_lexical_token() -> impl Parser<()> {
-        choice2(letter_lexical_token(), char('_').map(|_| ()))
+        choice!(letter_lexical_token(), char('_').constant(()))
     }
 
     pub fn identifier_part_lexical_token() -> impl Parser<()> {
-        choice2(identifier_start_lexical_token(), digit_lexical_token())
+        choice!(identifier_start_lexical_token(), digit_lexical_token())
     }
 
     pub fn letter_lexical_token() -> impl Parser<()> {
-        letter().map(|_| ())
+        letter().constant(())
     }
 
     pub fn digit_lexical_token() -> impl Parser<()> {
-        digit().map(|_| ())
+        digit().constant(())
     }
 
     pub fn exponent_lexical_token() -> impl Parser<()> {
-        seq3(
-            pattern("eE").map(|_| ()),
+        seq!(
+            pattern("eE").constant(()),
             pattern("+-").opt(),
             digit_lexical_token().plus(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn string_lexical_token() -> impl Parser<()> {
-        choice2(
-            seq2(char('@').opt(), multi_line_string_lexical_token()).map(|_| ()),
+        choice!(
+            seq!(char('@').opt(), multi_line_string_lexical_token()).constant(()),
             single_line_string_lexical_token(),
         )
     }
 
     pub fn multi_line_string_lexical_token() -> impl Parser<()> {
-        choice2(
-            seq3(
-                string("\"\"\"").map(|_| ()),
-                any().star_lazy(string("\"\"\"")).map(|_| ()),
-                string("\"\"\"").map(|_| ()),
+        choice!(
+            seq!(
+                string("\"\"\"").constant(()),
+                any().star_lazy(string("\"\"\"")).constant(()),
+                string("\"\"\"").constant(()),
             )
-            .map(|_| ()),
-            seq3(
-                string("'''").map(|_| ()),
-                any().star_lazy(string("'''")).map(|_| ()),
-                string("'''").map(|_| ()),
+            .constant(()),
+            seq!(
+                string("'''").constant(()),
+                any().star_lazy(string("'''")).constant(()),
+                string("'''").constant(()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn single_line_string_lexical_token() -> impl Parser<()> {
-        choice4(
-            seq3(
-                char('"').map(|_| ()),
+        choice!(
+            seq!(
+                char('"').constant(()),
                 string_content_double_quoted_lexical_token().star(),
-                char('"').map(|_| ()),
+                char('"').constant(()),
             )
-            .map(|_| ()),
-            seq3(
-                char('\'').map(|_| ()),
+            .constant(()),
+            seq!(
+                char('\'').constant(()),
                 string_content_single_quoted_lexical_token().star(),
-                char('\'').map(|_| ()),
+                char('\'').constant(()),
             )
-            .map(|_| ()),
-            seq3(
-                string("@\"").map(|_| ()),
+            .constant(()),
+            seq!(
+                string("@\"").constant(()),
                 pattern("^\"\n\r").star(),
-                char('"').map(|_| ()),
+                char('"').constant(()),
             )
-            .map(|_| ()),
-            seq3(
-                string("@'").map(|_| ()),
+            .constant(()),
+            seq!(
+                string("@'").constant(()),
                 pattern("^'\n\r").star(),
-                char('\'').map(|_| ()),
+                char('\'').constant(()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn string_content_double_quoted_lexical_token() -> impl Parser<()> {
-        choice2(
-            pattern("^\\\"\n\r").map(|_| ()),
-            seq2(char('\\').map(|_| ()), pattern("\n\r").map(|_| ())).map(|_| ()),
+        choice!(
+            pattern("^\\\"\n\r").constant(()),
+            seq!(char('\\').constant(()), pattern("\n\r").constant(())).constant(()),
         )
     }
 
     pub fn string_content_single_quoted_lexical_token() -> impl Parser<()> {
-        choice2(
-            pattern("^\\'\n\r").map(|_| ()),
-            seq2(char('\\').map(|_| ()), pattern("\n\r").map(|_| ())).map(|_| ()),
+        choice!(
+            pattern("^\\'\n\r").constant(()),
+            seq!(char('\\').constant(()), pattern("\n\r").constant(())).constant(()),
         )
     }
 
     pub fn newline_lexical_token() -> impl Parser<()> {
-        pattern("\n\r").map(|_| ())
+        pattern("\n\r").constant(())
     }
 
     pub fn hashbang_lexical_token() -> impl Parser<()> {
-        seq3(
-            string("#!").map(|_| ()),
+        seq!(
+            string("#!").constant(()),
             pattern("^\n\r").star(),
             newline_lexical_token().opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     // -----------------------------------------------------------------
     // Whitespace and comments.
     // -----------------------------------------------------------------
     pub fn hidden_whitespace() -> impl Parser<()> {
-        hidden_stuff_whitespace().plus().map(|_| ())
+        hidden_stuff_whitespace().plus().constant(())
     }
 
     pub fn hidden_stuff_whitespace() -> impl Parser<()> {
-        choice3(
+        choice!(
             visible_whitespace(),
             single_line_comment(),
             multi_line_comment(),
@@ -1780,25 +1780,25 @@ mod dart_grammar {
     }
 
     pub fn visible_whitespace() -> impl Parser<()> {
-        whitespace().map(|_| ())
+        whitespace().constant(())
     }
 
     pub fn single_line_comment() -> impl Parser<()> {
-        seq3(
-            string("//").map(|_| ()),
+        seq!(
+            string("//").constant(()),
             newline_lexical_token().neg().star(),
             newline_lexical_token().opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn multi_line_comment() -> impl Parser<()> {
-        seq3(
-            string("/*").map(|_| ()),
-            choice2(multi_line_comment(), string("*/").neg().map(|_| ())).star(),
-            string("*/").map(|_| ()),
+        seq!(
+            string("/*").constant(()),
+            choice!(multi_line_comment(), string("*/").neg().constant(())).star(),
+            string("*/").constant(()),
         )
-        .map(|_| ())
+        .constant(())
     }
 }
 

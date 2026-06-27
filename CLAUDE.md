@@ -220,7 +220,7 @@ hit the compiler error cold):
 - `rep_greedy`, `star_greedy`, `plus_greedy` (greedy repeaters: consume as much as possible, then
   backtrack one element at a time until `limit: impl Parser<()>` succeeds — limit's value type is
   fixed to `()`, unlike the lazy variants' `impl Parser<L>`, so non-`()` limiters like `digit()`
-  need `.map(|_| ())` first). `GreedyRepeatingParser` (`src/parser/repeater/greedy.rs`). Ported from
+  need `.constant(())` first). `GreedyRepeatingParser` (`src/parser/repeater/greedy.rs`). Ported from
   dart's `GreedyRepeatingParser`, which `LimitedRepeatingParser`s into a min-loop (hard-fails via `?`
   if it can't even reach `min` — correct, since there's no valid backtrack point below `min`) then a
   max-loop that grows `elements`/`contexts` (or `count`/`positions` in `fast_parse_on`) in lockstep,
@@ -526,10 +526,12 @@ hit the compiler error cold):
   nothing to fuse is a pure stylistic wash (same length, loses the "this is obviously a plain
   function call" property) with no offsetting benefit. Also deliberately left `choiceN(...)`
   call sites alone everywhere — `choice!` has no fusion counterpart (see "What's Next"), so there
-  was no genuine candidate to convert, anywhere in the codebase. **Excluded entirely from the
+  was no genuine candidate to convert, anywhere in the codebase. **Excluded at the time from the
   sweep: all four `#[grammar]`-based example grammars** (`pascal.rs`/`bibtex.rs`/`json.rs`/
-  `math.rs`) — see the dedicated "What's Next" entry on why `seq!`/`choice!` are currently unsafe
-  to use inside a `#[grammar]` module at all.
+  `math.rs`) — `seq!`/`choice!` didn't work inside a `#[grammar]` module at all yet (see the
+  "Fixed: `seq!`/`choice!` now work inside `#[grammar]` modules" entry above for the eventual fix;
+  `json.rs`'s `member()` rule has since been converted as the real-world validation of that fix,
+  with the rest of the sweep across these four grammars left as a follow-up).
 - **`choice!` variadic macro** (`rust-petitparser-macros/src/choice.rs`, function-like
   `#[proc_macro]`, re-exported via `prelude.rs` alongside `seq`/`grammar`) — same shape as `seq!`
   above: `choice!(a, b, c)` expands to `choice3(a, b, c)`, via the identical
@@ -554,35 +556,116 @@ hit the compiler error cold):
   `choice!`/`choiceN` to produce the same `T`, unlike dart's dynamically-typed `toChoiceParser()`.
   We hit this twice during the example-grammar ports, pre-dating `choice!` itself —
   `bibtex.rs`'s `field_string_within_braces` (three alternatives erased to `Parser<()>` via
-  `.map(|_| ())` since only the consumed span mattered, recovered later via
+  `.constant(())` since only the consumed span mattered, recovered later via
   `.input_with_message(...)`) and `pascal.rs`'s whole grammar (typed `Parser<()>` everywhere from
   the start, since it's a pure recognizer with no AST, so the 11-way `statement()` choice never
   even hit a type mismatch). Neither case needed actual heterogeneous *values* preserved; if a
   future caller does, the fix is a small sum-type enum with each arm `.map()`-ed into the
   matching variant, not anything `choice!`/`choiceN` themselves need to solve.
+- **Fixed: `seq!`/`choice!` now work inside `#[grammar]` modules.** Root cause (see prior "What's
+  Next" entry, now resolved): `ParserCallRewriter`'s `visit_expr_mut` override only matched
+  `Expr::Call` nodes; a `seq!(...)`/`choice!(...)` invocation is an opaque `Expr::Macro`/
+  `Stmt::Macro` at that point in expansion (macro arguments are raw, unparsed
+  `proc_macro2::TokenStream`, not `syn::Expr` nodes), so `VisitMut`'s default traversal had
+  nothing typed to recurse into and the rule-call rewrite silently never happened. The actual fix
+  turned out to be more general than "handle `Expr::Macro`": `syn`'s generated `VisitMut` trait
+  ships a dedicated, deliberately-empty-by-default hook —
+  `fn visit_token_stream_mut(&mut self, i: &mut proc_macro2::TokenStream) {}` — that
+  `visit_macro_mut`'s default implementation calls unconditionally, and *every* macro-position
+  variant's default (`visit_expr_macro_mut`, `visit_stmt_macro_mut`, `visit_item_macro_mut`,
+  `visit_pat_macro_mut`, etc. — expression position, statement position, item position, pattern
+  position, ...) routes through `visit_macro_mut` to get there. Overriding this **one** method
+  handles every macro invocation anywhere in a rule body uniformly, rather than needing a
+  separate override per AST position. Implementation
+  (`ParserCallRewriter::visit_token_stream_mut`, `rust-petitparser-macros/src/grammar.rs`):
+  parse the incoming tokens as `Punctuated<Expr, Token![,]>` (mirroring `seq!`/`choice!`'s own
+  input-parsing shape); on success, recursively call `self.visit_expr_mut(&mut each)` on every
+  parsed expression (re-entering the existing rewrite logic, so a rule call nested inside a
+  trailing closure's body, or inside a macro nested inside another macro's arguments, still gets
+  rewritten — confirmed by a dedicated test); on failure (the macro's tokens aren't a
+  comma-separated expression list — `println!`'s format-string-plus-args, `matches!`, etc.),
+  leave the tokens untouched rather than erroring, so unrelated macros are unaffected. A
+  deliberately generic design, not scoped to literally `seq`/`choice` by name, since the same
+  "rule calls go opaque inside macro tokens" problem applies to *any* macro a rule body might
+  invoke (the original bug-hunt used `println!` as the minimal repro, precisely to confirm it
+  wasn't `seq!`/`choice!`-specific).
+  Required first converting `grammar_impl` from `proc_macro::TokenStream` to
+  `proc_macro2::TokenStream` (mirroring `seq_impl`/`choice_impl`'s existing pattern, with
+  `lib.rs`'s `pub fn grammar` entry point doing the `.into()` conversion both ways) — this is
+  what makes `grammar_impl` callable from an ordinary `#[test]` (and steppable in a real
+  debugger), rather than needing a full `cargo expand` cycle per iteration. Tested in
+  `rust-petitparser-macros/src/grammar.rs`'s `#[cfg(test)] mod tests`: a `println!`-wrapped rule
+  call (proving genericity), `seq!(...)` as a `.mapN(...)`-chain receiver (genuine `Expr::Macro`
+  position, not just statement position), `seq!(...)` with trailing-closure fusion *and* a rule
+  call nested inside the closure body (proving the recursion goes all the way down), and
+  `choice!(...)`. Validated end-to-end against real macro expansion by converting `json.rs`'s
+  `member()` rule from `seq3(...).map3(...)` to `seq!(...)` with fused trailing closure — compiles
+  and the JSON test suite still passes unchanged.
+- **`seq!` migrated from implicit trailing-closure detection to an explicit `=>` separator** —
+  `seq!(parsers... => map_target)`, inspired by `quote_spanned!`'s `span => tokens` convention.
+  `=>` **replaces** the old trailing-comma-closure sugar entirely (one mechanism, no silent-
+  misdetection risk). Motivation: the old fusion check (`Some(Expr::Closure(c)) => fuse`) was
+  purely syntactic and couldn't tell "named function used as the map callback" apart from "a
+  parser value referenced by a bare variable" — both are just `Expr::Path` at the syntax level,
+  and proc-macros only see syntax, never types. This bit for real: `tests/example-grammars/
+  smalltalk/mod.rs`'s `unary_expression()`/`binary_expression()`/`cascade_expression()` originally
+  passed `build_message`/`build_cascade` (plain functions, not closure literals) as the trailing
+  `seq!` argument, which silently fell through to "just another parser" instead of fusing into
+  `.mapN(...)` — surfaced as a `Seq3<...>: Parser<...>` not satisfied error, fixed at the time by
+  eta-expanding into literal closures. The `=>` design fixes the underlying ambiguity properly:
+  once the separator itself signals "what follows is the map target," there's no need to even
+  check whether it's `Expr::Closure` — anything after `=>` goes straight into `.mapN(...)`, since
+  `.mapN` already accepts any `Fn`-shaped expression (so the eta-expanded closures could be
+  unwound back to plain `build_message`/`build_cascade` again, though that wasn't done since it's
+  a cosmetic wash either way).
+  - **Shared parse shape, not duplicated**: `rust-petitparser-macros/src/seq_input.rs`'s
+    `SeqInput` (`parsers: Punctuated<Expr, Token![,]>`, `target: Option<Expr>`, plus `Parse`/
+    `ToTokens` impls) is used by both `seq_impl` (build `seqN(...).mapN(target)`) and
+    `#[grammar]`'s `ParserCallRewriter`. The rewriter needed updating too: its
+    `visit_token_stream_mut` only tried a plain `Punctuated<Expr, Token![,]>` parse, which now
+    *fails* outright on any `=>`-form `seq!` call (the arrow isn't a valid continuation token for
+    a comma list) — silently skipping rule-call rewriting inside it. Fixed by falling back to
+    `SeqInput` when the plain comma-list parse fails, recursing into rule calls on both the
+    parser list and the target.
+  - **Real bug caught by testing, not anticipated up front**: `SeqInput::parse` didn't tolerate a
+    trailing comma *after* the target (`=> |x, y| { ... },`, common for diff-friendly multi-line
+    closures) — left unconsumed input behind for the top-level `parse2` call to reject. Two real
+    call sites (`sequence()`, `method()` in `smalltalk/mod.rs`) had exactly this shape. Fixed by
+    having `SeqInput::parse` optionally consume one trailing comma after the target.
+  - **Migration script** (one-off, not checked into the repo — lived in the scratch directory):
+    a `syn`-based tool that finds every old-style fused `seq!(...)` call and swaps just the single
+    comma token immediately before the closure for `=>`, leaving every other character untouched.
+    Deliberately *not* a full `syn::parse_file` → `prettyplease::unparse` round trip — `syn` drops
+    ordinary (non-doc) comments entirely when parsing, since they're stripped before tokenization
+    and never enter the AST at all, and this codebase's files are heavily commented. A whole-file
+    reparse-and-reprint would have silently deleted every `//` comment. The single-token swap
+    avoids this since it never reconstructs anything; it slices the original source text once,
+    using `proc-macro2`'s `span-locations` feature to map each token's `LineColumn` back to a byte
+    offset. Converted every old-style call across the repo: `src/expression/group.rs`,
+    `src/parser/ext.rs`, `smalltalk/mod.rs` (35 sites), `tabular.rs`, `misc_tests.rs`, `uri.rs`,
+    `seq_macro_tests.rs`, `combinator_tests.rs`, `bibtex.rs`, `json.rs`.
+  - Also fixed along the way, while improving `#[grammar]`'s own diagnostics: `grammar_impl`'s
+    `set_calls`/`undefined_decls`/`field_decls` switched from `quote!` to `quote_spanned!(f.sig.
+    ident.span() => ...)`, so a type error in a rule's body now points at that rule's own location
+    in the source instead of at the `#[grammar]` attribute line (`quote!`'s literal scaffolding
+    tokens default to `Span::call_site()`, which during attribute-macro expansion resolves to the
+    attribute's own line — even though the interpolated rule-body statements inside already
+    carried correct original spans). This had a real side effect: rustc suppresses several lints
+    (`dead_code`, `unused_braces` among them) for code it recognizes as macro-generated, and that
+    recognition is span-based — attaching a "real" source span un-suppresses them. Two lints came
+    back as a result, both fixed: `dead_code` on the generated struct's fields (genuinely true —
+    private, non-`start` rule fields are written once via `Self { field_name, ... }` but never
+    read back through `self.field`, since inter-rule references resolve through `new()`'s local
+    variables instead; fixed via `#[allow(dead_code)]` on the generated struct), and
+    `unused_braces` on `set_calls`'s `{ #(#stmts)* }` block (redundant whenever a rule body is a
+    single expression, but the braces are still structurally required for multi-statement bodies;
+    fixed via `#[allow(unused_braces)]` on the generated `fn new()`).
+  - Full workspace (build/test/clippy/fmt) green as of this writing.
 
 ## What's Next
-- **`seq!`/`choice!` don't work inside `#[grammar]` modules.** Confirmed with a minimal probe
-  grammar (a two-rule module where `start()` called `seq!(char('a'), rest())`): expansion failed
-  with `E0618: expected function, found SettableParser<Vec<char>>` on the `rest()` call. Root
-  cause: `#[grammar]`'s `ParserCallRewriter` (`rust-petitparser-macros/src/grammar.rs`) rewrites
-  bare rule self-calls like `rest()` → `rest.borrow()` by walking the function body with
-  `syn::visit_mut::VisitMut`, matching `Expr::Call` nodes specifically. `seq!(char('a'), rest())`
-  wraps `rest()` inside an `Expr::Macro` node instead (the macro's input is opaque, unparsed
-  tokens from `syn`'s point of view), and `VisitMut`'s default traversal doesn't recurse into a
-  macro invocation's arguments to find and rewrite calls inside it — so the rewrite silently
-  doesn't happen, and the generated code tries to call the `SettableParser` field as a function.
-  This means **`seq!`/`choice!` are currently unsafe to use anywhere inside `pascal.rs`/
-  `bibtex.rs`/`json.rs`/`math.rs`** (all four `#[grammar]`-based example grammars) — stick to
-  plain `seqN`/`choiceN` there until this is fixed. Likely fix: extend `ParserCallRewriter`'s
-  `visit_expr_mut` to special-case `Expr::Macro` — re-parse the macro's token stream as a
-  comma-separated expression list (same as `seq!`/`choice!`'s own input shape), recursively visit
-  each parsed expression, then re-emit the rewritten tokens back into the macro invocation. This
-  may end up overlapping with (or even falling out for free from) the reflection/introspection
-  work already deferred for the dart-parity linter port (`children`/`copy`/deep-equality, see the
-  scope B/C notes below) — both problems are fundamentally about walking into places the current
-  grammar macro doesn't look, so whatever AST/token traversal infrastructure that work ends up
-  building might directly solve this too rather than needing a second bespoke `Expr::Macro` case.
+- **Finish converting remaining `seqN`/`choiceN` call sites to `seq!`/`choice!` sugar** in
+  `pascal.rs`/`bibtex.rs`/`math.rs` — `smalltalk/mod.rs` and `json.rs` are already converted
+  (and now use the `=>` arrow form throughout). User-driven sweep, in progress.
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
   are already covered by `tests/example-grammars/{json,expr}.rs`. Done so far: **tabular**
@@ -751,10 +834,15 @@ hit the compiler error cold):
     `dart_test.dart`'s ~570 lines never inspect any extracted parse value, only call
     `isSuccess(input)`/`isFailure(input)` (implicit end-of-input + no-exception checks), so a
     full erasure design loses no test coverage while sidestepping type-juggling across ~100+
-    productions. Erasure convention: every rule body ends in `.map(|_| ())` unless it's a bare
-    delegating call to an already-`()`-typed rule; a leaf construct used inline as one
-    `choiceN(...)` arm gets `.map(|_| ())` at that inline site, since `choiceN`'s arms must share
-    one value type.
+    productions. **Erasure convention: every rule body ends in `.constant(())`** — not
+    `.map(|_| ())` — unless it's a bare delegating call to an already-`()`-typed rule; a leaf
+    construct used inline as one `choiceN(...)` arm gets `.constant(())` at that inline site,
+    since `choiceN`'s arms must share one value type. `.constant(value)` is the dedicated
+    combinator for "discard the delegate's matched value, succeed with a clone of `value`
+    instead" — exactly this shape — versus `.map(|_| ())`'s closure expressing the same thing
+    more indirectly; prefer it over `.map(|_| ())` everywhere in this codebase, not just here.
+    (Originally written as `.map(|_| ())` throughout; swept to `.constant(())` across
+    `dart.rs`/`pascal.rs`/`bibtex.rs`/`smalltalk/mod.rs` once this was noticed.)
     - Rust-keyword collision: dart's rule named `type` → `dart_type` (mirrors pascal's `type` →
       `pascal_type`).
     - `token_str`/`token_parser` (the free helper functions outside the `#[grammar]` module) have
@@ -861,17 +949,20 @@ hit the compiler error cold):
       actually uses; `.not()` and `.neg()` look similar but are not interchangeable, and this
       grammar is the first place in the codebase that needed `.neg()` for repetition rather than a
       one-off guard.
-    - **`seq!` macro doesn't work inside `#[grammar]` rule bodies that call other rules.** Tried
-      `seq!(period_token().star(), pragmas(), ..., |closure|)` inside `method_sequence()`; failed
-      with `E0618` (`period_token`/`pragmas`/etc. resolved to their `SettableParser<T>` *fields*,
-      not function calls) because the `#[grammar]` macro's `VisitMut` rule-name rewriter only
-      walks parsed `Expr` nodes (`Expr::Call`, recursing into its arguments) — a `seq!(...)`
-      invocation is an opaque `Expr::Macro` at that point in expansion, so the rewriter never sees
-      the zero-arg rule calls inside its token stream to rewrite them to `.borrow()`. Fixed by
-      using the explicit `seq8(...).map8(...)` form instead, which *is* plain nested `Expr::Call`s
-      the rewriter walks normally. General gotcha for future `#[grammar]` rules: prefer `seqN`/
-      `choiceN` directly over the `seq!`/`choice!` sugar macros whenever the arguments include
-      other rule calls.
+    - **`seq!` macro didn't work inside `#[grammar]` rule bodies that call other rules — fixed
+      since.** Tried `seq!(period_token().star(), pragmas(), ..., |closure|)` inside
+      `method_sequence()`; failed with `E0618` (`period_token`/`pragmas`/etc. resolved to their
+      `SettableParser<T>` *fields*, not function calls) because the `#[grammar]` macro's
+      `VisitMut` rule-name rewriter only walks parsed `Expr` nodes (`Expr::Call`, recursing into
+      its arguments) — a `seq!(...)` invocation is an opaque `Expr::Macro` at that point in
+      expansion, so the rewriter never saw the zero-arg rule calls inside its token stream to
+      rewrite them to `.borrow()`. Worked around at the time by using the explicit
+      `seq8(...).map8(...)` form instead, which *is* plain nested `Expr::Call`s the rewriter
+      walks normally — `method_sequence()` still uses that form today. The underlying limitation
+      itself is now fixed (see "Fixed: `seq!`/`choice!` now work inside `#[grammar]` modules" in
+      "What's Implemented"), so `method_sequence()` could be converted to `seq!(...)` with a
+      trailing closure now; not yet done, left as a follow-up alongside the rest of the
+      `pascal.rs`/`bibtex.rs`/`math.rs` sweep.
   - **regexp** — a self-contained regex-engine-with-NFA project, conceptually separate from
     "porting a grammar."
   - Decided: keep self-contained grammar+test examples (tabular-shaped) in

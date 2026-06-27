@@ -102,7 +102,7 @@ fn seq_macro_composes_with_map3() {
 
 #[gtest]
 fn seq_macro_fuses_trailing_closure() {
-    let p = seq!(char('a'), char('b'), char('c'), |a, b, c| format!(
+    let p = seq!(char('a'), char('b'), char('c') => |a, b, c| format!(
         "{a}{b}{c}"
     ));
     assert_success!(p, "abc", &"abc".to_string());
@@ -110,13 +110,13 @@ fn seq_macro_fuses_trailing_closure() {
 
 #[gtest]
 fn seq_macro_fuses_trailing_closure_at_min_arity() {
-    let p = seq!(char('a'), char('b'), |a, b| (b, a));
+    let p = seq!(char('a'), char('b') => |a, b| (b, a));
     assert_success!(p, "ab", ('b', 'a'));
 }
 
 #[gtest]
 fn seq_macro_fused_closure_failure_still_propagates() {
-    let p = seq!(char('a'), char('b'), char('c'), |a, b, c| format!(
+    let p = seq!(char('a'), char('b'), char('c') => |a, b, c| format!(
         "{a}{b}{c}"
     ));
     assert_failure!(p, "abx", "expected 'c', but found 'x'", 2);

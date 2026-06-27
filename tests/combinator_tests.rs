@@ -100,7 +100,7 @@ fn choice3_test() {
 #[gtest]
 fn nested_parens_settable_test() {
     let mut expr = SettableParser::<i32>::undefined();
-    let inner = seq!(char('('), expr.clone(), char(')'), |_, n, _| n + 1);
+    let inner = seq!(char('('), expr.clone(), char(')') => |_, n, _| n + 1);
     let leaf = char('x').map(|_| 0);
     expr.set(choice2(inner, leaf));
 
@@ -123,7 +123,7 @@ fn and_fails_when_inner_fails() {
 
 #[gtest]
 fn and_as_lookahead_in_sequence() {
-    let p = seq!(char('a'), char('b').and(), |l, _| l);
+    let p = seq!(char('a'), char('b').and() => |l, _| l);
     assert_success!(p, "ab", 'a', 1);
 }
 
@@ -146,7 +146,7 @@ fn not_fails_when_inner_succeeds() {
 
 #[gtest]
 fn not_succeeds_without_advancing() {
-    let p = seq!(char('z').not(), letter().star(), |_, ls| ls);
+    let p = seq!(char('z').not(), letter().star() => |_, ls| ls);
     assert_success!(p, "abc", &vec!['a', 'b', 'c'], 3);
     assert_success!(p, "yz", &vec!['y', 'z'], 2);
     assert_failure!(p, "zyx", "success not expected", 0);

@@ -107,31 +107,29 @@ pub fn math_parser() -> impl Parser<Expr> {
     let mut builder: ExpressionBuilder<Expr> = ExpressionBuilder::new();
 
     builder.primitive(
-        seq3(
+        seq!(
             digit().plus(),
-            seq2(char('.'), digit().plus()).opt(),
-            seq3(pattern("eE"), pattern("+-").opt(), digit().plus()).opt(),
+            seq!(char('.'), digit().plus()).opt(),
+            seq!(pattern("eE"), pattern("+-").opt(), digit().plus()).opt(),
         )
         .input_with_message("number expected".to_string())
         .trim()
         .map(|s: String| Expr::Value(s.parse::<f64>().unwrap())),
     );
     let recursive = builder.loopback.borrow();
-    builder.primitive(
-        seq2(
-            seq2(letter(), word().star())
-                .input_with_message("name expected".to_string())
-                .trim(),
-            seq3(
-                char('(').trim(),
-                recursive.star_sep(char(',').trim(), Trailing::Disallowed),
-                char(')').trim(),
-            )
-            .map3(|_, args, _| args)
-            .opt_with(Vec::new()),
+    builder.primitive(seq!(
+        seq!(letter(), word().star())
+            .input_with_message("name expected".to_string())
+            .trim(),
+        seq!(
+            char('(').trim(),
+            recursive.star_sep(char(',').trim(), Trailing::Disallowed),
+            char(')').trim(),
+            => |_, args, _| args,
         )
-        .map2(create_binding),
-    );
+        .opt_with(Vec::new()),
+        => create_binding,
+    ));
 
     builder
         .group()

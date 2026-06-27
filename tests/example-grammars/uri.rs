@@ -25,14 +25,13 @@ pub struct UriParts {
 }
 
 pub fn uri() -> impl Parser<UriParts> {
-    seq5(
-        seq2(scheme(), char(':')).opt(),
-        seq2(string("//"), authority_span()).opt(),
+    seq!(
+        seq!(scheme(), char(':')).opt(),
+        seq!(string("//"), authority_span()).opt(),
         path_span(),
-        seq2(char('?'), query_span()).opt(),
-        seq2(char('#'), fragment_span()).opt(),
-    )
-    .map5(|scheme, authority, path, query, fragment| {
+        seq!(char('?'), query_span()).opt(),
+        seq!(char('#'), fragment_span()).opt(),
+        => |scheme, authority, path, query, fragment| {
         let scheme = scheme.map(|(s, _)| s);
         let authority_str = authority.map(|(_, a)| a);
         let auth = parse_authority(authority_str.as_deref().unwrap_or(""));
@@ -79,7 +78,7 @@ fn fragment_span() -> impl Parser<String> {
 }
 
 pub fn authority() -> impl Parser<Authority> {
-    seq3(credentials().opt(), hostname().opt(), port().opt()).map(
+    seq!(credentials().opt(), hostname().opt(), port().opt()).map(
         |(credentials, hostname, port)| Authority {
             username: credentials.clone().map(|(u, _)| u),
             password: credentials.and_then(|(_, p)| p.map(|(_, pw)| pw)),
@@ -99,8 +98,8 @@ pub fn parse_authority(input: &str) -> Authority {
 fn credentials() -> impl Parser<(String, Option<(char, String)>)> {
     seq!(
         username(),
-        seq2(char(':'), password()).opt(),
-        char('@'),
+        seq!(char(':'), password()).opt(),
+        char('@') =>
         |u, p, _| (u, p)
     )
 }
@@ -124,7 +123,7 @@ fn hostname() -> impl Parser<String> {
 }
 
 fn port() -> impl Parser<(char, String)> {
-    seq2(
+    seq!(
         char(':'),
         digit().plus().input_with_message("port".to_string()),
     )
@@ -146,8 +145,9 @@ pub fn parse_query(input: &str) -> Vec<(String, Option<String>)> {
 }
 
 fn param() -> impl Parser<(String, Option<String>)> {
-    seq2(param_key(), seq2(char('='), param_value()).opt())
-        .map2(|key, value| (key, value.map(|(_, v)| v)))
+    seq!(param_key(), seq!(char('='), param_value()).opt(),
+        => |key, value| (key, value.map(|(_, v)| v)),
+    )
 }
 
 fn param_key() -> impl Parser<String> {

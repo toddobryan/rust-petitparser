@@ -42,9 +42,7 @@ fn map_fast_parse_on_skips_the_mapping_function() {
 
 #[gtest]
 fn elements_at_parser() {
-    let p = seq2(digit(), letter())
-        .map2(|one, two| vec![one, two])
-        .elements_at(vec![-1, 0]);
+    let p = seq!(digit(), letter(), => |one, two| vec![one, two]).elements_at(vec![-1, 0]);
     assert_success!(p, "1a", &vec!['a', '1'], 2);
     assert_success!(p, "2b", &vec!['b', '2'], 2);
     assert_failure!(p, "", "expected digit, but reached end of input", 0);
@@ -54,9 +52,7 @@ fn elements_at_parser() {
 
 #[gtest]
 fn pick_from_start() {
-    let p = seq2(digit(), letter())
-        .map2(|one, two| vec![one, two])
-        .pick(1);
+    let p = seq!(digit(), letter(), => |one, two| vec![one, two]).pick(1);
     assert_success!(p, "1a", 'a', 2);
     assert_success!(p, "2b", 'b', 2);
     assert_failure!(p, "", "expected digit, but reached end of input", 0);
@@ -66,9 +62,7 @@ fn pick_from_start() {
 
 #[gtest]
 fn pick_from_end() {
-    let p = seq2(digit(), letter())
-        .map2(|one, two| vec![one, two])
-        .pick(-1);
+    let p = seq!(digit(), letter(), => |one, two| vec![one, two]).pick(-1);
     assert_success!(p, "1a", 'a', 2);
     assert_success!(p, "2b", 'b', 2);
     assert_failure!(p, "", "expected digit, but reached end of input", 0);
@@ -135,11 +129,10 @@ fn token_test() {
 
 #[gtest]
 fn token_line_and_column() {
-    let p = seq2(
-        seq2(char('a'), char('b')),
-        seq2(char('\n'), char('c').plus().token()),
-    )
-    .map2(|(_, _), (_, t)| t);
+    let p = seq!(
+        seq!(char('a'), char('b')),
+        seq!(char('\n'), char('c').plus().token()),
+        => |(_, _), (_, t)| t);
     let success = p.parse("ab\nccd").unwrap();
     assert_that!(success.value.line(), eq(2));
     assert_that!(success.value.column(), eq(1));
@@ -359,7 +352,7 @@ fn flat_map() {
 
 #[gtest]
 fn flat_map_continues_correctly() {
-    let p = seq2(
+    let p = seq!(
         digit().flat_map::<_, Vec<char>>(|n| letter().times(n.to_digit(10).unwrap() as usize)),
         char('*'),
     );

@@ -13,7 +13,6 @@ use crate::parser::action::pick::PickParser;
 use crate::parser::action::token::TokenParser;
 use crate::parser::character::whitespace;
 use crate::parser::combinator::lookahead::{AndParser, NotParser};
-use crate::parser::combinator::sequence::seq3;
 use crate::parser::combinator::skip::SkipParser;
 use crate::parser::misc::end::eof;
 use crate::parser::misc::epsilon::epsilon;
@@ -22,8 +21,7 @@ use crate::parser::repeater::greedy::GreedyRepeatingParser;
 use crate::parser::repeater::lazy::LazyRepeatingParser;
 use crate::parser::repeater::possessive::PossessiveRepeatingParser;
 use crate::parser::repeater::separated::{SeparatedList, SeparatedListRepeatingParser, Trailing};
-use crate::prelude::any;
-use rust_petitparser_macros::seq;
+use crate::prelude::{any, seq, seq3};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -266,7 +264,7 @@ where
         Aft: Debug,
         Bef: Debug,
     {
-        seq!(before, self, after, |_, val, _| val)
+        seq!(before, self, after => |_, val, _| val)
     }
 
     fn and(self) -> impl Parser<T> {

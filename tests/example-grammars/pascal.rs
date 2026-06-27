@@ -82,10 +82,10 @@ mod pascal_grammar {
     }
 
     pub fn program() -> impl Parser<()> {
-        seq6(
+        seq!(
             token_str("program", spacer()),
             identifier(),
-            seq3(
+            seq!(
                 token_str("(", spacer()),
                 identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
@@ -95,11 +95,11 @@ mod pascal_grammar {
             block(),
             token_str(".", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement() -> impl Parser<()> {
-        seq2(
+        seq!(
             statement_label().opt(),
             choice11(
                 statement_assign(),
@@ -115,195 +115,195 @@ mod pascal_grammar {
                 statement_exit(),
             ),
         )
-        .map(|_| ())
+        .constant(())
         .opt()
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_label() -> impl Parser<()> {
-        seq2(unsigned_integer(), token_str(":", spacer())).map(|_| ())
+        seq!(unsigned_integer(), token_str(":", spacer())).constant(())
     }
 
     pub fn statement_assign() -> impl Parser<()> {
-        seq3(variable(), token_str(":=", spacer()), expression()).map(|_| ())
+        seq!(variable(), token_str(":=", spacer()), expression()).constant(())
     }
 
     pub fn statement_call() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            seq3(
+            seq!(
                 token_str("(", spacer()),
                 expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
             )
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_block() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("begin", spacer()),
             statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_if() -> impl Parser<()> {
-        seq5(
+        seq!(
             token_str("if", spacer()),
             expression(),
             token_str("then", spacer()),
             statement(),
-            seq2(token_str("else", spacer()), statement()).opt(),
+            seq!(token_str("else", spacer()), statement()).opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_repeat() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("repeat", spacer()),
             statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("until", spacer()),
             expression(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_while() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("while", spacer()),
             expression(),
             token_str("do", spacer()),
             statement(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_for() -> impl Parser<()> {
-        seq8(
+        seq!(
             token_str("for", spacer()),
             identifier(),
             token_str(":=", spacer()),
             expression(),
-            choice2(token_str("to", spacer()), token_str("downto", spacer())),
+            choice!(token_str("to", spacer()), token_str("downto", spacer())),
             expression(),
             token_str("do", spacer()),
             statement(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_case() -> impl Parser<()> {
-        seq5(
+        seq!(
             token_str("case", spacer()),
             expression(),
             token_str("of", spacer()),
-            seq3(
+            seq!(
                 pascal_constant().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 statement(),
             )
-            .map(|_| ())
+            .constant(())
             .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_with() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("with", spacer()),
             variable().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str("do", spacer()),
             statement(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn statement_goto() -> impl Parser<()> {
-        seq2(token_str("goto", spacer()), unsigned_integer()).map(|_| ())
+        seq!(token_str("goto", spacer()), unsigned_integer()).constant(())
     }
 
     pub fn statement_exit() -> impl Parser<()> {
-        seq4(
+        seq!(
             token_str("exit", spacer()),
             token_str("(", spacer()),
-            choice2(token_str("program", spacer()), identifier()),
+            choice!(token_str("program", spacer()), identifier()),
             token_str(")", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block() -> impl Parser<()> {
-        seq6(
+        seq!(
             block_label().opt(),
             block_const().opt(),
             block_type().opt(),
             block_var().opt(),
-            choice2(block_procedure(), block_function()).star(),
+            choice!(block_procedure(), block_function()).star(),
             block_statement(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_label() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("label", spacer()),
             unsigned_integer().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str(";", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_const() -> impl Parser<()> {
-        seq2(
+        seq!(
             token_str("const", spacer()),
-            seq4(
+            seq!(
                 identifier(),
                 token_str("=", spacer()),
                 pascal_constant(),
                 token_str(";", spacer()),
             )
-            .map(|_| ())
+            .constant(())
             .plus(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_type() -> impl Parser<()> {
-        seq2(
+        seq!(
             token_str("type", spacer()),
-            seq4(
+            seq!(
                 identifier(),
                 token_str("=", spacer()),
                 pascal_type(),
                 token_str(";", spacer()),
             )
-            .map(|_| ())
+            .constant(())
             .plus(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_var() -> impl Parser<()> {
-        seq2(
+        seq!(
             token_str("var", spacer()),
-            seq4(
+            seq!(
                 identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 pascal_type(),
                 token_str(";", spacer()),
             )
-            .map(|_| ())
+            .constant(())
             .plus(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_procedure() -> impl Parser<()> {
-        seq6(
+        seq!(
             token_str("procedure", spacer()),
             identifier(),
             parameter_list(),
@@ -311,11 +311,11 @@ mod pascal_grammar {
             block(),
             token_str(";", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_function() -> impl Parser<()> {
-        seq8(
+        seq!(
             token_str("function", spacer()),
             identifier(),
             parameter_list(),
@@ -325,46 +325,46 @@ mod pascal_grammar {
             block(),
             token_str(";", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn block_statement() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("begin", spacer()),
             statement().plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str("end", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     // Dart names this rule `type`, but `type` is a Rust keyword.
     pub fn pascal_type() -> impl Parser<()> {
-        choice3(
+        choice!(
             simple_type(),
             type_pointer(),
-            seq2(
+            seq!(
                 token_str("packed", spacer()).opt(),
-                choice4(type_set(), type_array(), type_record(), type_file()),
+                choice!(type_set(), type_array(), type_record(), type_file()),
             )
-            .map(|_| ()),
+            .constant(()),
         )
     }
 
     pub fn type_pointer() -> impl Parser<()> {
-        seq2(token_str("^", spacer()), identifier()).map(|_| ())
+        seq!(token_str("^", spacer()), identifier()).constant(())
     }
 
     pub fn type_set() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("set", spacer()),
             token_str("of", spacer()),
             simple_type(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn type_array() -> impl Parser<()> {
-        seq6(
+        seq!(
             token_str("array", spacer()),
             token_str("[", spacer()),
             simple_type().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
@@ -372,29 +372,29 @@ mod pascal_grammar {
             token_str("of", spacer()),
             pascal_type(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn type_record() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("record", spacer()),
             field_list(),
             token_str("end", spacer()),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn type_file() -> impl Parser<()> {
-        seq2(
+        seq!(
             token_str("file", spacer()),
-            seq2(token_str("of", spacer()), pascal_type()).opt(),
+            seq!(token_str("of", spacer()), pascal_type()).opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn identifier() -> impl Parser<String> {
         token_parser(
-            seq2(letter(), word().star()).input_with_message("identifier expected".to_string()),
+            seq!(letter(), word().star()).input_with_message("identifier expected".to_string()),
             spacer(),
         )
         .only_if_with_message(
@@ -404,29 +404,29 @@ mod pascal_grammar {
     }
 
     pub fn variable() -> impl Parser<()> {
-        seq2(
+        seq!(
             identifier(),
-            choice3(
-                seq3(
+            choice!(
+                seq!(
                     token_str("[", spacer()),
                     expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                     token_str("]", spacer()),
                 )
-                .map(|_| ()),
-                seq2(token_str(".", spacer()), identifier()).map(|_| ()),
-                token_str("^", spacer()).map(|_| ()),
+                .constant(()),
+                seq!(token_str(".", spacer()), identifier()).constant(()),
+                token_str("^", spacer()).constant(()),
             )
             .star(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn unsigned_number() -> impl Parser<f64> {
         token_parser(
-            seq3(
+            seq!(
                 digit().plus(),
-                seq2(char('.'), digit().plus()).opt(),
-                seq3(one_of("eE"), one_of("+-").opt(), digit().plus()).opt(),
+                seq!(char('.'), digit().plus()).opt(),
+                seq!(one_of("eE"), one_of("+-").opt(), digit().plus()).opt(),
             )
             .input_with_message("unsigned number expected".to_string())
             .map(|s: String| s.parse::<f64>().unwrap()),
@@ -436,17 +436,17 @@ mod pascal_grammar {
 
     pub fn string_literal() -> impl Parser<String> {
         token_parser(
-            seq3(char('\''), pattern("^'").star(), char('\''))
+            seq!(char('\''), pattern("^'").star(), char('\''))
                 .input_with_message("string expected".to_string()),
             spacer(),
         )
     }
 
     pub fn expression() -> impl Parser<()> {
-        seq2(
+        seq!(
             simple_expression(),
-            seq2(
-                choice7(
+            seq!(
+                choice!(
                     token_str("<", spacer()),
                     token_str("<=", spacer()),
                     token_str("=", spacer()),
@@ -459,22 +459,22 @@ mod pascal_grammar {
             )
             .opt(),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn simple_expression() -> impl Parser<()> {
-        seq2(
-            choice2(token_str("+", spacer()), token_str("-", spacer())).opt(),
+        seq!(
+            choice!(token_str("+", spacer()), token_str("-", spacer())).opt(),
             term().plus_sep(token_str("or", spacer()), Trailing::Disallowed),
         )
         .plus()
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn term() -> impl Parser<()> {
         factor()
             .plus_sep(
-                choice5(
+                choice!(
                     token_str("*", spacer()),
                     token_str("/", spacer()),
                     token_str("div", spacer()),
@@ -483,69 +483,69 @@ mod pascal_grammar {
                 ),
                 Trailing::Disallowed,
             )
-            .map(|_| ())
+            .constant(())
     }
 
     pub fn factor() -> impl Parser<()> {
-        choice6(
-            seq3(
+        choice!(
+            seq!(
                 token_str("(", spacer()),
                 expression(),
                 token_str(")", spacer()),
             )
-            .map(|_| ()),
-            seq2(token_str("not", spacer()), factor()).map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(token_str("not", spacer()), factor()).constant(()),
+            seq!(
                 token_str("[", spacer()),
-                seq2(
+                seq!(
                     expression(),
-                    seq2(token_str("..", spacer()), expression()).opt(),
+                    seq!(token_str("..", spacer()), expression()).opt(),
                 )
-                .map(|_| ())
+                .constant(())
                 .star_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str("]", spacer()),
             )
-            .map(|_| ()),
-            seq2(
+            .constant(()),
+            seq!(
                 identifier(),
-                seq3(
+                seq!(
                     token_str("(", spacer()),
                     expression().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                     token_str(")", spacer()),
                 )
                 .opt(),
             )
-            .map(|_| ()),
+            .constant(()),
             unsigned_constant(),
             variable(),
         )
     }
 
     pub fn unsigned_constant() -> impl Parser<()> {
-        choice4(
-            token_str("nil", spacer()).map(|_| ()),
-            string_literal().map(|_| ()),
-            unsigned_number().map(|_| ()),
-            identifier().map(|_| ()),
+        choice!(
+            token_str("nil", spacer()).constant(()),
+            string_literal().constant(()),
+            unsigned_number().constant(()),
+            identifier().constant(()),
         )
     }
 
     pub fn parameter_list() -> impl Parser<()> {
-        seq3(
+        seq!(
             token_str("(", spacer()),
-            seq4(
+            seq!(
                 token_str("var", spacer()).opt(),
                 identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 identifier(),
             )
-            .map(|_| ())
+            .constant(())
             .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
             token_str(")", spacer()),
         )
-        .map(|_| ())
+        .constant(())
         .opt()
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn unsigned_integer() -> impl Parser<i64> {
@@ -559,84 +559,84 @@ mod pascal_grammar {
     }
 
     pub fn pascal_constant() -> impl Parser<()> {
-        choice2(
-            seq2(
+        choice!(
+            seq!(
                 one_of("+-"),
-                choice2(identifier().map(|_| ()), unsigned_number().map(|_| ())),
+                choice!(identifier().constant(()), unsigned_number().constant(())),
             )
-            .map(|_| ()),
+            .constant(()),
             unsigned_constant(),
         )
     }
 
     pub fn simple_type() -> impl Parser<()> {
-        choice3(
-            seq3(
+        choice!(
+            seq!(
                 token_str("(", spacer()),
                 identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(")", spacer()),
             )
-            .map(|_| ()),
-            seq3(
+            .constant(()),
+            seq!(
                 pascal_constant(),
                 token_str("..", spacer()),
                 pascal_constant(),
             )
-            .map(|_| ()),
-            identifier().map(|_| ()),
+            .constant(()),
+            identifier().constant(()),
         )
     }
 
     pub fn field_list() -> impl Parser<()> {
-        choice2(
-            seq2(field_list_base(), field_list_case().opt()).map(|_| ()),
+        choice!(
+            seq!(field_list_base(), field_list_case().opt()).constant(()),
             field_list_case(),
         )
     }
 
     pub fn field_list_base() -> impl Parser<()> {
-        seq3(
+        seq!(
             identifier().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
             token_str(":", spacer()),
             pascal_type(),
         )
-        .map(|_| ())
+        .constant(())
         .plus_sep(token_str(";", spacer()), Trailing::Disallowed)
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn field_list_case() -> impl Parser<()> {
-        seq5(
+        seq!(
             token_str("case", spacer()),
-            seq2(identifier(), token_str(":", spacer())).opt(),
+            seq!(identifier(), token_str(":", spacer())).opt(),
             identifier(),
             token_str("of", spacer()),
-            seq5(
+            seq!(
                 pascal_constant().plus_sep(token_str(",", spacer()), Trailing::Disallowed),
                 token_str(":", spacer()),
                 token_str("(", spacer()),
                 field_list(),
                 token_str(")", spacer()),
             )
-            .map(|_| ())
+            .constant(())
             .plus_sep(token_str(";", spacer()), Trailing::Disallowed),
         )
-        .map(|_| ())
+        .constant(())
     }
 
     pub fn spacer() -> impl Parser<()> {
-        choice2(whitespace().map(|_| ()), comment())
+        choice!(whitespace().constant(()), comment())
             .plus()
-            .map(|_| ())
+            .constant(())
     }
 
     pub fn comment() -> impl Parser<()> {
-        seq3(
+        seq!(
             string("(*"),
-            choice2(comment(), any().map(|_| ())).star_lazy(string("*)")),
+            choice!(comment(), any().constant(())).star_lazy(string("*)")),
             string("*)"),
         )
-        .map(|_| ())
+        .constant(())
     }
 }
 

@@ -11,15 +11,15 @@ mod expr_grammar {
     }
 
     pub fn add_expr() -> impl Parser<f64> {
-        seq2(mul_expr(), seq2(one_of("+-").trim(), mul_expr()).star()).map(|x| fold_ops(&x))
+        seq!(mul_expr(), seq!(one_of("+-").trim(), mul_expr()).star()).map(|x| fold_ops(&x))
     }
 
     fn mul_expr() -> impl Parser<f64> {
-        seq2(atom(), seq2(one_of("*/").trim(), atom()).star()).map(|x| fold_ops(&x))
+        seq!(atom(), seq!(one_of("*/").trim(), atom()).star()).map(|x| fold_ops(&x))
     }
 
     fn atom() -> impl Parser<f64> {
-        choice2(
+        choice!(
             number(),
             add_expr().skip(char('(').trim(), char(')').trim()),
         )

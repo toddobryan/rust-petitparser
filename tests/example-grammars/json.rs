@@ -23,7 +23,7 @@ mod json_grammar {
     }
 
     fn json_value() -> impl Parser<Json> {
-        choice6(null(), boolean(), num(), json_string(), array(), object())
+        choice!(null(), boolean(), num(), json_string(), array(), object())
     }
 
     fn object() -> impl Parser<Json> {
@@ -41,15 +41,20 @@ mod json_grammar {
     }
 
     fn member() -> impl Parser<(String, Json)> {
-        seq3(raw_string().trim(), char(':'), json_value().trim()).map3(|key, _, value| (key, value))
+        seq!(
+            raw_string().trim(),
+            char(':'),
+            json_value().trim() =>
+            |key, _, value| (key, value)
+        )
     }
 
     fn num() -> impl Parser<Json> {
-        seq4(
+        seq!(
             char('-').opt(),
-            choice2(
+            choice!(
                 char('0').map(|c| c.to_string()),
-                seq2(char('0').not(), digit().plus()).input(),
+                seq!(char('0').not(), digit().plus()).input(),
             )
             .opt(),
             fraction().opt(),
@@ -61,15 +66,15 @@ mod json_grammar {
     }
 
     fn fraction() -> impl Parser<()> {
-        seq2(char('.'), digit().plus()).constant(())
+        seq!(char('.'), digit().plus()).constant(())
     }
 
     fn exponent() -> impl Parser<()> {
-        seq3(char_ci('e'), one_of("+-").opt(), digit().plus()).constant(())
+        seq!(char_ci('e'), one_of("+-").opt(), digit().plus()).constant(())
     }
 
     fn boolean() -> impl Parser<Json> {
-        choice2(
+        choice!(
             string("true").constant(Json::Bool(true)),
             string("false").constant(Json::Bool(false)),
         )
@@ -91,7 +96,7 @@ mod json_grammar {
     }
 
     fn string_char() -> impl Parser<char> {
-        choice2(none_of("\"\\"), escape_sequence())
+        choice!(none_of("\"\\"), escape_sequence())
     }
 
     fn escape_sequence() -> impl Parser<char> {
@@ -99,7 +104,7 @@ mod json_grammar {
     }
 
     fn escape_char() -> impl Parser<char> {
-        choice8(
+        choice!(
             char('"').constant('"'),
             char('b').constant('\x08'),
             char('f').constant('\x0C'),

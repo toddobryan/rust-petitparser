@@ -33,15 +33,15 @@ mod bibtex_grammar {
     }
 
     fn entry() -> impl Parser<BibTeXEntry> {
-        seq6(
+        seq!(
             type_token().trim(),
             char('{').trim(),
             cite_key().trim(),
             char(',').trim(),
             fields(),
             char('}').trim(),
+            => |kind, _, key, _, fields, _| BibTeXEntry { kind, key, fields },
         )
-        .map6(|kind, _, key, _, fields, _| BibTeXEntry { kind, key, fields })
     }
 
     fn fields() -> impl Parser<Vec<(String, String)>> {
@@ -49,12 +49,16 @@ mod bibtex_grammar {
     }
 
     fn field() -> impl Parser<(String, String)> {
-        seq3(field_name().trim(), char('=').trim(), field_value())
-            .map3(|name, _, value| (name, value))
+        seq!(
+            field_name().trim(),
+            char('=').trim(),
+            field_value() =>
+            |name, _, value| (name, value)
+        )
     }
 
     fn field_value() -> impl Parser<String> {
-        choice3(
+        choice!(
             field_value_in_quotes(),
             field_value_in_braces(),
             raw_string(),
@@ -62,34 +66,34 @@ mod bibtex_grammar {
     }
 
     fn field_value_in_quotes() -> impl Parser<String> {
-        seq3(char('"'), field_string_within_quotes(), char('"'))
+        seq!(char('"'), field_string_within_quotes(), char('"'))
             .input_with_message("quoted string expected".to_string())
     }
 
     fn field_string_within_quotes() -> impl Parser<Vec<()>> {
-        choice2(field_char_within_quotes(), escape_char()).star()
+        choice!(field_char_within_quotes(), escape_char()).star()
     }
 
     fn field_char_within_quotes() -> impl Parser<()> {
-        pattern("^\\\"").map(|_| ())
+        pattern("^\\\"").constant(())
     }
 
     fn field_value_in_braces() -> impl Parser<String> {
-        seq3(char('{'), field_string_within_braces(), char('}'))
+        seq!(char('{'), field_string_within_braces(), char('}'))
             .input_with_message("braced string expected".to_string())
     }
 
     fn field_string_within_braces() -> impl Parser<Vec<()>> {
-        choice3(
+        choice!(
             field_char_within_braces(),
             escape_char(),
-            seq3(char('{'), field_string_within_braces(), char('}')).map(|_| ()),
+            seq!(char('{'), field_string_within_braces(), char('}')).constant(()),
         )
         .star()
     }
 
     fn field_char_within_braces() -> impl Parser<()> {
-        pattern("^\\{}").map(|_| ())
+        pattern("^\\{}").constant(())
     }
 
     fn raw_string() -> impl Parser<String> {
@@ -118,7 +122,7 @@ mod bibtex_grammar {
     }
 
     fn escape_char() -> impl Parser<()> {
-        seq2(char('\\'), any()).map(|_| ())
+        seq!(char('\\'), any()).constant(())
     }
 }
 
