@@ -35,6 +35,10 @@ where
 }
 
 impl<T> HasContext for Success<T> {
+    fn text(&self) -> Rc<String> {
+        self.context.text()
+    }
+
     fn buffer(&self) -> Rc<[char]> {
         self.context.buffer()
     }
@@ -51,6 +55,10 @@ pub struct Failure {
 }
 
 impl HasContext for Failure {
+    fn text(&self) -> Rc<String> {
+        self.context.text()
+    }
+
     fn buffer(&self) -> Rc<[char]> {
         self.context.buffer()
     }

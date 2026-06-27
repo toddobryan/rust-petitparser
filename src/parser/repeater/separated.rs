@@ -1,9 +1,8 @@
-use crate::core::context::Context;
+use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 /// whether in a list of the form elem sep elem sep elem ...
 /// the final element must, can, or cannot be followed by a separator
@@ -208,28 +207,34 @@ where
         })
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
         let mut count: usize = 0;
-        let mut current: usize = position;
+        let mut current: usize = context.position;
         while count < self.min {
             if count > 0 {
-                let sep = self.separator.fast_parse_on(buffer.clone(), current)?;
+                let sep = self
+                    .separator
+                    .fast_parse_on(&context.with_position(current))?;
                 current = sep;
             }
-            let result = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            let result = self
+                .delegate
+                .fast_parse_on(&context.with_position(current))?;
             count += 1;
             current = result;
         }
         while self.max.is_none() || count < self.max.unwrap() {
             let previous = current;
             if count > 0 {
-                let sep = self.separator.fast_parse_on(buffer.clone(), current);
+                let sep = self
+                    .separator
+                    .fast_parse_on(&context.with_position(current));
                 match sep {
                     None => break,
                     Some(pos) => current = pos,
                 }
             }
-            let result = self.delegate.fast_parse_on(buffer.clone(), current);
+            let result = self.delegate.fast_parse_on(&context.with_position(current));
             match result {
                 None => {
                     return Some(match self.trailing {
@@ -246,8 +251,9 @@ where
         match self.trailing {
             Trailing::Allowed | Trailing::Required => {
                 if count > 0 {
-                    let trailing_separator: Option<usize> =
-                        self.separator.fast_parse_on(buffer.clone(), current);
+                    let trailing_separator: Option<usize> = self
+                        .separator
+                        .fast_parse_on(&context.with_position(current));
                     match trailing_separator {
                         Some(new_position) => {
                             current = new_position;

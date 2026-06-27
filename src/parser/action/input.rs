@@ -3,7 +3,6 @@ use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct InputParser<P, T: Debug> {
@@ -19,9 +18,7 @@ where
     fn parse_on(&self, context: &Context) -> ParseResult<String> {
         match &self.message {
             Some(m) => {
-                let position = self
-                    .delegate
-                    .fast_parse_on(context.buffer().clone(), context.position());
+                let position = self.delegate.fast_parse_on(context);
                 match position {
                     None => context.failure(m.clone()),
                     Some(pos) => context.success_with_position(
@@ -48,7 +45,7 @@ where
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        self.delegate.fast_parse_on(buffer, position)
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        self.delegate.fast_parse_on(context)
     }
 }

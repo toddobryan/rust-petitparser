@@ -3,7 +3,6 @@ use rust_petitparser::assert_success;
 use rust_petitparser::prelude::*;
 use rust_petitparser_macros::grammar;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 fn token_parser<T, S, P>(p: impl Parser<T>, spacer: P) -> impl Parser<()>
 where

@@ -1,7 +1,6 @@
 use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
-use std::rc::Rc;
 
 pub fn eof() -> EndOfInputParser {
     EndOfInputParser {
@@ -27,11 +26,11 @@ impl Parser<()> for EndOfInputParser {
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        if position < buffer.len() {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        if context.position < context.buffer.len() {
             None
         } else {
-            Some(position)
+            Some(context.position)
         }
     }
 }

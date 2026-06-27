@@ -2,7 +2,6 @@ use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct PossessiveRepeatingParser<P> {
@@ -47,17 +46,20 @@ where
         ctx.success(elements)
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
         let mut count: usize = 0;
-        let mut current = position;
+        let mut current = context.position;
         while count < self.min {
-            let new_pos: usize = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            let new_pos: usize = self
+                .delegate
+                .fast_parse_on(&context.with_position(current))?;
             assert!(current < new_pos, "{:?} must consume input", self.delegate);
             count += 1;
             current = new_pos;
         }
         while self.max.is_none() || count < self.max.unwrap() {
-            let result: Option<usize> = self.delegate.fast_parse_on(buffer.clone(), current);
+            let result: Option<usize> =
+                self.delegate.fast_parse_on(&context.with_position(current));
             match result {
                 None => break,
                 Some(new_pos) => {

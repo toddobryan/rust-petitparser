@@ -30,26 +30,22 @@ pub trait ParserExt<T>: Parser<T> + Sized
 where
     T: Debug,
 {
-    fn all_matches(
-        self,
-        buffer: Rc<[char]>,
-        start: usize,
-        overlapping: bool,
-    ) -> MatchesIterable<T, Self> {
+    fn all_matches(self, context: Context, overlapping: bool) -> MatchesIterable<T, Self> {
         MatchesIterable {
             parser: self,
-            context: Context {
-                buffer,
-                position: start,
-            },
+            context,
             overlapping,
             parser_type: PhantomData,
         }
     }
 
     fn accept_at(&self, input: &str, start: usize) -> bool {
-        let buffer: Rc<[char]> = input.chars().collect::<Vec<_>>().into();
-        self.fast_parse_on(buffer, start).is_some()
+        self.fast_parse_on(&Context {
+            text: Rc::new(input.to_string()),
+            buffer: input.chars().collect::<Vec<_>>().into(),
+            position: start,
+        })
+        .is_some()
     }
 
     fn accept(&self, input: &str) -> bool {

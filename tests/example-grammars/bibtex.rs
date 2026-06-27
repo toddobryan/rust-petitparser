@@ -3,7 +3,6 @@ use rust_petitparser::assert_success;
 use rust_petitparser::prelude::*;
 use rust_petitparser_macros::grammar;
 use std::fmt;
-use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BibTeXEntry {

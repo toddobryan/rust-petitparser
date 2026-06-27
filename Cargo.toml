@@ -8,6 +8,7 @@ members = ["rust-petitparser-macros"]
 resolver = "3"
 
 [dependencies]
+regex = "1.12.4"
 rust-petitparser-macros = { path = "rust-petitparser-macros" }
 
 [dev-dependencies]

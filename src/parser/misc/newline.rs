@@ -1,7 +1,6 @@
 use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct NewlineParser {
@@ -30,7 +29,9 @@ impl Parser<String> for NewlineParser {
         )
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        let position = context.position;
+        let buffer = context.buffer.clone();
         if position < buffer.len() {
             if buffer[position] == '\n' {
                 return Some(position + 1);

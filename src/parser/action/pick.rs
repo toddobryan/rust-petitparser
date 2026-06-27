@@ -1,5 +1,5 @@
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::{fmt::Debug, rc::Rc};
 
 use crate::core::{
     context::Context,
@@ -35,7 +35,7 @@ where
         })
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        self.delegate.fast_parse_on(buffer, position)
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        self.delegate.fast_parse_on(context)
     }
 }

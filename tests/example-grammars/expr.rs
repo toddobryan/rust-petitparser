@@ -2,7 +2,6 @@ use googletest::prelude::*;
 use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 use rust_petitparser_macros::grammar;
-use std::rc::Rc;
 
 #[grammar]
 mod expr_grammar {

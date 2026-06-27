@@ -530,8 +530,9 @@ hit the compiler error cold):
   sweep: all four `#[grammar]`-based example grammars** (`pascal.rs`/`bibtex.rs`/`json.rs`/
   `math.rs`) — `seq!`/`choice!` didn't work inside a `#[grammar]` module at all yet (see the
   "Fixed: `seq!`/`choice!` now work inside `#[grammar]` modules" entry above for the eventual fix;
-  `json.rs`'s `member()` rule has since been converted as the real-world validation of that fix,
-  with the rest of the sweep across these four grammars left as a follow-up).
+  `json.rs`'s `member()` rule was converted first as the real-world validation of that fix, and
+  the rest of the sweep across all four grammars (plus `smalltalk/mod.rs`) is now done too — see
+  the `=>` migration entry above).
 - **`choice!` variadic macro** (`rust-petitparser-macros/src/choice.rs`, function-like
   `#[proc_macro]`, re-exported via `prelude.rs` alongside `seq`/`grammar`) — same shape as `seq!`
   above: `choice!(a, b, c)` expands to `choice3(a, b, c)`, via the identical
@@ -661,11 +662,70 @@ hit the compiler error cold):
     single expression, but the braces are still structurally required for multi-statement bodies;
     fixed via `#[allow(unused_braces)]` on the generated `fn new()`).
   - Full workspace (build/test/clippy/fmt) green as of this writing.
+- **`Context` gained a `text: Rc<String>` field, threaded everywhere alongside `buffer:
+  Rc<[char]>`** (`src/core/context.rs`) — groundwork for porting dart's regex-backed
+  `PatternParser` next (see "What's Next"): the `regex` crate operates on UTF-8 byte offsets
+  over a `&str`/`String`, and rebuilding that from `buffer: Rc<[char]>` on every match attempt
+  would be an O(n) tax on the hot path, so `text` is built once and cloned (cheap `Rc` bump)
+  everywhere a `Context` already gets cloned. Added `Context::new(input: &str, position: usize)
+  -> Self` as the one place that actually builds both fields from scratch — used pervasively by
+  tests as a replacement for ad hoc buffer-building helpers.
+  - **`fast_parse_on`'s signature changed from `(buffer: Rc<[char]>, position: usize) ->
+    Option<usize>` to `(context: &Context) -> Option<usize>`** — once `Context` had a second
+    field, the old loose-parameter signature would have needed a third parameter bolted on (and
+    would again for any future field); taking `&Context` directly means new fields are available
+    to every override for free. Touched all ~21 files that override it, plus the `Rc<P>` blanket
+    impl (`core/parser.rs`) and `#[grammar]`'s generated `impl Parser<T>` block
+    (`rust-petitparser-macros/src/grammar.rs`) — the latter was the one place a stale hand-written
+    `quote!` template could have silently kept the old signature, but it had already been kept in
+    sync. Confirmed by the user mid-refactor to be a real ergonomics win (not just mechanical
+    churn) — see [[feedback_context_unification]] in project memory.
+  - **`Token<T>` switched from `{ value, buffer: Rc<[char]>, start: usize, end: usize }` to
+    `{ value, context: Context, end: usize }`** (`src/core/token.rs`) — `context.position`
+    subsumes the old `start` field (a new `Token::start()` accessor reads it back),
+    `context.buffer`/`context.text` ride along for free instead of `Token` needing its own
+    separate `text` field. `end: usize` stays a sibling field since `Context` only models one
+    position, not a range. `line_and_column_of`/`position_string` changed from taking loose
+    `(buffer: Rc<[char]>, position: usize)` to a single `&Context`, and `line_and_column_of` now
+    returns a `TextLocation { line: usize, column: usize }` struct (exported via `prelude.rs`)
+    instead of a `(usize, usize)` tuple — `line_and_column_of`'s internal newline-scan now reuses
+    the context's existing `buffer`/`text` handles via `context.with_position(0)` (a new
+    `HasContext` helper) rather than rebuilding anything.
+  - **`all_matches` now takes a full `Context` directly** (not `buffer: Rc<[char]>, start:
+    usize`) — strengthens its pre-existing design rationale (its caller, `line_and_column_of`,
+    already holds a `Context`-shaped pair and should hand it over rather than rebuild it) rather
+    than changing it. By contrast, `accept`/`accept_at` deliberately **kept** taking `&str` (plus
+    `start: usize` for `accept_at`) and build a fresh `Context` internally — they're public,
+    one-shot leaf entry points (mirroring `parse(&str)` and dart's own API), so exposing the
+    internal `Context` type on their public signature would have been a regression, not a
+    parallel improvement.
+  - One real test bug found while fixing up call sites for the new signatures:
+    `tests/action_tests.rs`'s `token_test` built its expected `Token` from `success.context` (the
+    *end* context, position 3) instead of the starting context — `TokenParser`'s actual
+    implementation correctly uses the start context for `Token.context` with `end` held
+    separately, so the test's own expected value was wrong, not the implementation.
+  - `regex = "1.12.4"` is already in `Cargo.toml` as a dependency, added in anticipation of the
+    `PatternParser` port, but no regex-parser code has been written yet — deliberately paused
+    (mid-design) to land this `Context`/`Token`/`fast_parse_on` plumbing refactor cleanly first.
+    Picking the regex port back up is the immediate next step (see "What's Next").
 
 ## What's Next
-- **Finish converting remaining `seqN`/`choiceN` call sites to `seq!`/`choice!` sugar** in
-  `pascal.rs`/`bibtex.rs`/`math.rs` — `smalltalk/mod.rs` and `json.rs` are already converted
-  (and now use the `=>` arrow form throughout). User-driven sweep, in progress.
+- **Resume porting dart's regex-backed `PatternParser`** (`lib/src/parser/predicate/pattern.dart`
+  in the dart-petitparser reference checkout) — paused mid-design to land the `Context`
+  `text`/`fast_parse_on`/`Token` refactor above first, which was specifically motivated by this
+  port (the `regex` crate needs a `&str`/byte-offset view of the input, now available via
+  `Context.text`/`Context::new`, without forcing a rebuild on every match attempt). Design
+  sketched but not yet implemented: a `RegexMatch { text: String, start: usize, end: usize,
+  groups: Vec<Option<String>> }` value type with **char-indexed** (not byte-indexed) `start`/`end`
+  to match this codebase's existing char-index convention (required for Unicode/emoji
+  correctness), and a `RegexParser { regex: Regex, message: String }` taking an already-compiled
+  `regex::Regex` (mirroring dart's "pass a compiled pattern instance" constructor). Needs an
+  anchored-match check (`regex`'s `find_at` finds the next match *at or after* a byte offset, not
+  *exactly at* it — a match starting later must be treated as a parse failure even though
+  `find_at` "found something") and char/byte offset translation at the boundary
+  (`haystack.char_indices().nth(position)` to go in, `haystack[start..end].chars().count()` to
+  come back out) — capture-group text itself needs no translation, only the overall match's
+  start/end positions do.
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
   are already covered by `tests/example-grammars/{json,expr}.rs`. Done so far: **tabular**
@@ -958,10 +1018,9 @@ hit the compiler error cold):
       expansion, so the rewriter never saw the zero-arg rule calls inside its token stream to
       rewrite them to `.borrow()`. Worked around at the time by using the explicit
       `seq8(...).map8(...)` form instead, which *is* plain nested `Expr::Call`s the rewriter
-      walks normally — `method_sequence()` still uses that form today. The underlying limitation
-      itself is now fixed (see "Fixed: `seq!`/`choice!` now work inside `#[grammar]` modules" in
-      "What's Implemented"), so `method_sequence()` could be converted to `seq!(...)` with a
-      trailing closure now; not yet done, left as a follow-up alongside the rest of the
+      walks normally. The underlying limitation is now fixed (see "Fixed: `seq!`/`choice!` now
+      work inside `#[grammar]` modules" in "What's Implemented"), and `method_sequence()` has
+      since been converted to `seq!(...)` with the `=>` arrow form, along with the rest of the
       `pascal.rs`/`bibtex.rs`/`math.rs` sweep.
   - **regexp** — a self-contained regex-engine-with-NFA project, conceptually separate from
     "porting a grammar."

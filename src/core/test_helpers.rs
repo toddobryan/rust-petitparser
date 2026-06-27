@@ -15,7 +15,7 @@ macro_rules! assert_success {
 
         assert_that!(result.context.position, eq(set_pos), "in parse_on");
 
-        let pos = $parser.fast_parse_on($input.chars().collect::<Vec<_>>().into(), 0);
+        let pos = $parser.fast_parse_on(&Context::new($input, 0));
         if pos.is_none() {
             panic!("In fast_parse_on, expected position after successful parse, but got None");
         }
@@ -38,7 +38,7 @@ macro_rules! assert_failure {
         $( let set_pos: usize = $pos; )?
         assert_that!(failure.context.position, eq(set_pos));
 
-        let pos = $parser.fast_parse_on($input.chars().collect::<Vec<_>>().into(), 0);
+        let pos = $parser.fast_parse_on(&Context::new($input, 0));
         assert_that!(pos, eq(None));
     };
 }

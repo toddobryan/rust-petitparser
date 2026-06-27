@@ -2,7 +2,6 @@ use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct SuccessParser<T: Clone + Debug> {
@@ -17,8 +16,8 @@ where
         context.success(self.result.clone())
     }
 
-    fn fast_parse_on(&self, _buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        Some(position)
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        Some(context.position)
     }
 }
 

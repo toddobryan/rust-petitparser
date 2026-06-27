@@ -1,11 +1,6 @@
 use googletest::prelude::*;
 use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
-use std::rc::Rc;
-
-fn buf(s: &str) -> Rc<[char]> {
-    s.chars().collect::<Vec<_>>().into()
-}
 
 #[gtest]
 fn eof_on_empty_input() {
@@ -199,86 +194,173 @@ fn failure_with_message_preserves_position() {
 
 #[gtest]
 fn line_and_column_of_single_line() {
-    let b = buf("abc");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
-    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
-    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+    let b = "abc";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 1)),
+        eq(&TextLocation { line: 1, column: 2 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 1, column: 3 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_empty_buffer() {
-    let b = buf("");
-    assert_that!(line_and_column_of(b, 0), eq((1, 1)));
+    let b = "";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_lf_newline() {
-    let b = buf("ab\ncd");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
-    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    let b = "ab\ncd";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 1)),
+        eq(&TextLocation { line: 1, column: 2 })
+    );
     // position on '\n' itself is still treated as line 1
-    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 1, column: 3 })
+    );
     // first character after newline
-    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 1)));
-    assert_that!(line_and_column_of(b.clone(), 4), eq((2, 2)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 3)),
+        eq(&TextLocation { line: 2, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 4)),
+        eq(&TextLocation { line: 2, column: 2 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_crlf_newline() {
-    let b = buf("a\r\nb");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    let b = "a\r\nb";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
     // position on '\r' — still line 1
-    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 1)),
+        eq(&TextLocation { line: 1, column: 2 })
+    );
     // position on '\n' inside the \r\n token — still line 1
-    assert_that!(line_and_column_of(b.clone(), 2), eq((1, 3)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 1, column: 3 })
+    );
     // first character after \r\n
-    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 1)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 3)),
+        eq(&TextLocation { line: 2, column: 1 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_cr_newline() {
-    let b = buf("a\rb");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
+    let b = "a\rb";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
     // position on '\r' — still line 1
-    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 1)),
+        eq(&TextLocation { line: 1, column: 2 })
+    );
     // first character after \r
-    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 2, column: 1 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_multiple_lines() {
-    let b = buf("a\nb\nc");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
-    assert_that!(line_and_column_of(b.clone(), 1), eq((1, 2)));
-    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
-    assert_that!(line_and_column_of(b.clone(), 3), eq((2, 2)));
-    assert_that!(line_and_column_of(b.clone(), 4), eq((3, 1)));
+    let b = "a\nb\nc";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 1)),
+        eq(&TextLocation { line: 1, column: 2 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 2, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 3)),
+        eq(&TextLocation { line: 2, column: 2 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 4)),
+        eq(&TextLocation { line: 3, column: 1 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_position_past_end() {
-    let b = buf("ab\ncd");
+    let b = "ab\ncd";
     // position equal to buffer length: column should be (len - last_offset + 1)
-    assert_that!(line_and_column_of(b, 5), eq((2, 3)));
+    assert_that!(
+        line_and_column_of(&Context::new(b, 5)),
+        eq(&TextLocation { line: 2, column: 3 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_blank_line() {
     // two newlines in a row create an empty middle line
-    let b = buf("a\n\nb");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
-    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1)));
-    assert_that!(line_and_column_of(b.clone(), 3), eq((3, 1)));
+    let b = "a\n\nb";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 2, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 3)),
+        eq(&TextLocation { line: 3, column: 1 })
+    );
 }
 
 #[gtest]
 fn line_and_column_of_mixed_line_endings() {
     // \n then \r then \r\n
-    let b = buf("a\nb\rc\r\nd");
-    assert_that!(line_and_column_of(b.clone(), 0), eq((1, 1)));
-    assert_that!(line_and_column_of(b.clone(), 2), eq((2, 1))); // 'b'
-    assert_that!(line_and_column_of(b.clone(), 4), eq((3, 1))); // 'c'
-    assert_that!(line_and_column_of(b.clone(), 7), eq((4, 1))); // 'd'
+    let b = "a\nb\rc\r\nd";
+    assert_that!(
+        line_and_column_of(&Context::new(b, 0)),
+        eq(&TextLocation { line: 1, column: 1 })
+    );
+    assert_that!(
+        line_and_column_of(&Context::new(b, 2)),
+        eq(&TextLocation { line: 2, column: 1 })
+    ); // 'b'
+    assert_that!(
+        line_and_column_of(&Context::new(b, 4)),
+        eq(&TextLocation { line: 3, column: 1 })
+    ); // 'c'
+    assert_that!(
+        line_and_column_of(&Context::new(b, 7)),
+        eq(&TextLocation { line: 4, column: 1 })
+    ); // 'd'
 }
 
 // newline

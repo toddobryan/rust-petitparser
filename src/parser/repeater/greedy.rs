@@ -1,5 +1,5 @@
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::{fmt::Debug, rc::Rc};
 
 use crate::core::{
     context::{Context, HasContext},
@@ -70,18 +70,20 @@ where
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
         let mut count = 0;
-        let mut current: usize = position;
+        let mut current: usize = context.position;
         while count < self.min {
-            let result = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            let result = self
+                .delegate
+                .fast_parse_on(&context.with_position(current))?;
             assert!(current < result, "{:?} must always consume", self.delegate);
             current = result;
             count += 1;
         }
         let mut positions: Vec<usize> = vec![current];
         while self.max.is_none() || count < self.max.unwrap() {
-            let result = self.delegate.fast_parse_on(buffer.clone(), current);
+            let result = self.delegate.fast_parse_on(&context.with_position(current));
             if result.is_none() {
                 break;
             }
@@ -94,7 +96,7 @@ where
         loop {
             let limiter = self
                 .limit
-                .fast_parse_on(buffer.clone(), *positions.last().unwrap());
+                .fast_parse_on(&context.with_position(*positions.last().unwrap()));
             match limiter {
                 None => {
                     if count == 0 {

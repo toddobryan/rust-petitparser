@@ -31,7 +31,7 @@ fn map_fast_parse_on_skips_the_mapping_function() {
         c
     });
 
-    let pos = p.fast_parse_on("1".chars().collect::<Vec<_>>().into(), 0);
+    let pos = p.fast_parse_on(&Context::new("1", 0));
     assert_that!(pos, eq(Some(1)));
     assert_that!(*calls.borrow(), eq(0));
 
@@ -92,7 +92,7 @@ fn constant_fast_parse_on_skips_cloning_the_replacement_value() {
     };
     let p = char('a').constant(value);
 
-    let pos = p.fast_parse_on("a".chars().collect::<Vec<_>>().into(), 0);
+    let pos = p.fast_parse_on(&Context::new("a", 0));
     assert_that!(pos, eq(Some(1)));
     assert_that!(*clones.borrow(), eq(0));
 
@@ -114,7 +114,7 @@ fn token_fast_parse_on_skips_building_the_token_and_inner_side_effects() {
         })
         .token();
 
-    let pos = p.fast_parse_on("1".chars().collect::<Vec<_>>().into(), 0);
+    let pos = p.fast_parse_on(&Context::new("1", 0));
     assert_that!(pos, eq(Some(1)));
     assert_that!(*calls.borrow(), eq(0));
 }
@@ -122,8 +122,7 @@ fn token_fast_parse_on_skips_building_the_token_and_inner_side_effects() {
 #[gtest]
 fn token_test() {
     let p = char('a').plus().token();
-    let success = p.parse("aaab").unwrap();
-    let tok = Token::new(vec!['a', 'a', 'a'], success.context.buffer.clone(), 0, 3);
+    let tok = Token::new(vec!['a', 'a', 'a'], Context::new("aaab", 0), 3);
     assert_success!(p, "aaab", &tok, 3);
 }
 
@@ -155,7 +154,7 @@ fn token_accessors_across_mixed_line_endings() {
 
     let expected_starts: Vec<usize> = (0..14).collect();
     assert_that!(
-        &tokens.iter().map(|t| t.start).collect::<Vec<_>>(),
+        &tokens.iter().map(|t| t.start()).collect::<Vec<_>>(),
         eq(&expected_starts)
     );
 
@@ -192,7 +191,7 @@ fn token_accessors_across_mixed_line_endings() {
     );
 
     for token in &tokens {
-        assert_that!(token.buffer.iter().collect::<String>(), eq(buffer));
+        assert_that!(token.context.buffer.iter().collect::<String>(), eq(buffer));
     }
 }
 
@@ -204,7 +203,7 @@ fn token_join_normal() {
     let joined = Token::join(tokens);
     let expected_values: Vec<char> = buffer.chars().collect();
     assert_that!(joined.value, eq(&expected_values));
-    assert_that!(joined.start, eq(0));
+    assert_that!(joined.start(), eq(0));
     assert_that!(joined.end, eq(buffer.chars().count()));
 }
 
@@ -217,7 +216,7 @@ fn token_join_reverse_order() {
     let mut expected_values: Vec<char> = buffer.chars().collect();
     expected_values.reverse();
     assert_that!(joined.value, eq(&expected_values));
-    assert_that!(joined.start, eq(0));
+    assert_that!(joined.start(), eq(0));
     assert_that!(joined.end, eq(buffer.chars().count()));
 }
 
@@ -230,11 +229,11 @@ fn token_join_empty() {
 #[gtest]
 #[should_panic(expected = "Token::join requires all tokens use the same buffer")]
 fn token_join_different_buffer() {
-    let buffer_a: Rc<[char]> = "12".chars().collect::<Vec<_>>().into();
-    let buffer_b: Rc<[char]> = "32".chars().collect::<Vec<_>>().into();
+    let text_a: &str = "12";
+    let text_b: &str = "32";
     let tokens = vec![
-        Token::new('1', buffer_a, 0, 2),
-        Token::new('3', buffer_b, 0, 2),
+        Token::new('1', Context::new(text_a, 0), 2),
+        Token::new('3', Context::new(text_b, 0), 2),
     ];
     let _ = Token::join(tokens);
 }

@@ -10,13 +10,10 @@ struct TestVals {
 
 impl TestVals {
     fn new() -> Self {
-        let buffer = Rc::new(['a', '\n', 'c']);
+        let text = "a\nc";
         Self {
-            buffer: buffer.clone(),
-            context: Context {
-                buffer: buffer.clone(),
-                position: 0,
-            },
+            buffer: text.chars().collect::<Vec<_>>().into(),
+            context: Context::new(text, 0),
         }
     }
 }

@@ -1,41 +1,43 @@
+use crate::core::context::{Context, HasContext};
 use crate::parser::ext::ParserExt;
 use crate::parser::misc::newline::newline;
 use std::cmp::{max, min};
 use std::fmt::{Debug, Display};
-use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Token<T> {
     pub value: T,
-    pub buffer: Rc<[char]>,
-    pub start: usize,
+    pub context: Context,
     pub end: usize,
 }
 
 impl<T> Token<T> {
-    pub fn new(value: T, buffer: Rc<[char]>, start: usize, end: usize) -> Self {
+    pub fn new(value: T, context: Context, end: usize) -> Self {
         Self {
             value,
-            buffer,
-            start,
+            context,
             end,
         }
     }
 
+    pub fn start(&self) -> usize {
+        self.context.position
+    }
+
     pub fn input(&self) -> &[char] {
-        &self.buffer[self.start..self.end]
+        &self.context.buffer[self.context.position..self.end]
     }
 
     pub fn length(&self) -> usize {
-        self.end - self.start
+        self.end - self.context.position
     }
 
     pub fn line(&self) -> usize {
-        line_and_column_of(self.buffer.clone(), self.start).0
+        line_and_column_of(&self.context).line
     }
 
     pub fn column(&self) -> usize {
-        line_and_column_of(self.buffer.clone(), self.start).1
+        line_and_column_of(&self.context).column
     }
 
     pub fn join(tokens: impl IntoIterator<Item = Token<T>>) -> Token<Vec<T>> {
@@ -43,24 +45,23 @@ impl<T> Token<T> {
         let first_token = iter
             .next()
             .expect("Token::join requires at least one token");
-        let buffer = first_token.buffer;
-        let mut start: usize = first_token.start;
+        let buffer = first_token.context.buffer.clone();
+        let mut start: usize = first_token.context.position;
         let mut end: usize = first_token.end;
         let mut values: Vec<T> = vec![first_token.value];
 
         for tok in iter {
             assert!(
-                tok.buffer == buffer,
+                tok.context.buffer == buffer,
                 "Token::join requires all tokens use the same buffer"
             );
-            start = min(start, tok.start);
+            start = min(start, tok.context.position);
             end = max(end, tok.end);
             values.push(tok.value);
         }
         Token {
             value: values,
-            buffer,
-            start,
+            context: first_token.context.with_position(start),
             end,
         }
     }
@@ -71,26 +72,42 @@ impl<T: Display> Display for Token<T> {
         write!(
             f,
             "Token[{}]: {}",
-            position_string(self.buffer.clone(), self.start),
+            position_string(&self.context),
             self.value
         )
     }
 }
 
-pub fn line_and_column_of(buffer: Rc<[char]>, position: usize) -> (usize, usize) {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextLocation {
+    pub line: usize,
+    pub column: usize,
+}
+
+pub fn line_and_column_of(context: &Context) -> TextLocation {
     let mut line: usize = 1;
     let mut offset: usize = 0;
-    for token in newline().token().all_matches(buffer, 0, false) {
+    let position: usize = context.position;
+    for token in newline()
+        .token()
+        .all_matches(context.with_position(0), false)
+    {
         if position < token.end {
-            return (line, position - offset + 1);
+            return TextLocation {
+                line,
+                column: position - offset + 1,
+            };
         }
         line += 1;
         offset = token.end;
     }
-    (line, position - offset + 1)
+    TextLocation {
+        line,
+        column: position - offset + 1,
+    }
 }
 
-pub fn position_string(buffer: Rc<[char]>, position: usize) -> String {
-    let (line, column) = line_and_column_of(buffer, position);
-    format!("{}:{}", line, column)
+pub fn position_string(context: &Context) -> String {
+    let loc = line_and_column_of(context);
+    format!("{}:{}", loc.line, loc.column)
 }

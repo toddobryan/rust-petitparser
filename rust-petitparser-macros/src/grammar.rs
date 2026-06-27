@@ -123,8 +123,8 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
             fn parse_on(&self, context: &Context) -> ParseResult<#start_type> {
                 self.start.parse_on(context)
             }
-            fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-                self.start.fast_parse_on(buffer, position)
+            fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+                self.start.fast_parse_on(context)
             }
         }
     };

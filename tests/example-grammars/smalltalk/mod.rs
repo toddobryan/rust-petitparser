@@ -36,7 +36,6 @@ use ast::{build_assignment, build_cascade, build_message};
 use rust_petitparser::prelude::*;
 use rust_petitparser_macros::grammar;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 fn token_parser<T, S, P>(p: impl Parser<T>, spacer: P) -> impl Parser<T>
 where

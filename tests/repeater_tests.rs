@@ -606,7 +606,7 @@ fn star_lazy_with_non_consuming_delegate_should_panic() {
         eq("Delegate parser EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+    let result = panic::catch_unwind(|| p.fast_parse_on(&Context::new("", 0)))
         .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
@@ -628,7 +628,7 @@ fn plus_lazy_with_non_consuming_delegate_should_panic() {
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+    let result = panic::catch_unwind(|| p.fast_parse_on(&Context::new("", 0)))
         .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
@@ -761,7 +761,7 @@ fn star_greedy_with_non_consuming_delegate_should_panic() {
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+    let result = panic::catch_unwind(|| p.fast_parse_on(&Context::new("", 0)))
         .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
@@ -783,7 +783,7 @@ fn plus_greedy_with_non_consuming_delegate_should_panic() {
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(|| p.fast_parse_on("".chars().collect::<Vec<_>>().into(), 0))
+    let result = panic::catch_unwind(|| p.fast_parse_on(&Context::new("", 0)))
         .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),

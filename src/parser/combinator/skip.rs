@@ -3,7 +3,6 @@ use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct SkipParser<A, Aft, B, Bef, P, T> {
@@ -34,9 +33,17 @@ where
             .success_with_position(result.value, after.context.position)
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        let before = self.before.fast_parse_on(buffer.clone(), position)?;
-        let result = self.delegate.fast_parse_on(buffer.clone(), before)?;
-        self.after.fast_parse_on(buffer.clone(), result)
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        let before = self.before.fast_parse_on(context)?;
+        let result = self.delegate.fast_parse_on(&Context {
+            text: context.text.clone(),
+            buffer: context.buffer.clone(),
+            position: before,
+        })?;
+        self.after.fast_parse_on(&Context {
+            text: context.text.clone(),
+            buffer: context.buffer.clone(),
+            position: result,
+        })
     }
 }

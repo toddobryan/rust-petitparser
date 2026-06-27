@@ -3,7 +3,6 @@ use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct LazyRepeatingParser<P, T, PC, TC> {
@@ -63,24 +62,28 @@ where
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
         let mut count: usize = 0;
-        let mut current: usize = position;
+        let mut current: usize = context.position;
         while count < self.min {
-            let result = self.delegate.fast_parse_on(buffer.clone(), current)?;
+            let result = self
+                .delegate
+                .fast_parse_on(&context.with_position(current))?;
             assert!(current < result, "{:?} must always consume", self.delegate);
             current = result;
             count += 1;
         }
         loop {
-            let limiter = self.limit.fast_parse_on(buffer.clone(), current);
+            let limiter = self.limit.fast_parse_on(&context.with_position(current));
             match limiter {
                 Some(_) => return Some(current),
                 None => {
                     if self.max.is_some() && count >= self.max.unwrap() {
                         return None;
                     }
-                    let result = self.delegate.fast_parse_on(buffer.clone(), current)?;
+                    let result = self
+                        .delegate
+                        .fast_parse_on(&context.with_position(current))?;
                     assert!(current < result, "{:?} must always consume", self.delegate);
                     current = result;
                     count += 1;

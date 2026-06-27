@@ -64,13 +64,13 @@ impl Parser<String> for CharacterRepeatingParser {
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        let end = buffer.len();
-        let mut current = position;
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        let end = context.buffer.len();
+        let mut current = context.position;
         let mut count = 0_usize;
         while (self.max.is_none() || count < self.max.unwrap())
             && current < end
-            && (self.test)(buffer[current])
+            && (self.test)(context.buffer[current])
         {
             current += 1;
             count += 1;

@@ -87,8 +87,8 @@ impl<T> Parser<T> for SettableParser<T> {
         self.delegate.borrow().parse_on(context)
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        self.delegate.borrow().fast_parse_on(buffer, position)
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        self.delegate.borrow().fast_parse_on(context)
     }
 }
 
@@ -122,11 +122,11 @@ impl<T> Parser<T> for SettableParserRef<T> {
             .parse_on(context)
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
         self.delegate
             .upgrade()
             .expect("SettableParser owner dropped")
             .borrow()
-            .fast_parse_on(buffer, position)
+            .fast_parse_on(context)
     }
 }

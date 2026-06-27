@@ -80,10 +80,10 @@ impl Parser<String> for PredicateParser {
         }
     }
 
-    fn fast_parse_on(&self, buffer: Rc<[char]>, position: usize) -> Option<usize> {
-        let end = position + self.length;
-        if end <= buffer.len() {
-            let substring: String = buffer[position..end].iter().collect();
+    fn fast_parse_on(&self, context: &Context) -> Option<usize> {
+        let end = context.position + self.length;
+        if end <= context.buffer.len() {
+            let substring: String = context.buffer[context.position..end].iter().collect();
             if (self.predicate)(&substring) {
                 return Some(end);
             }
