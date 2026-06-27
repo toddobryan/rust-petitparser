@@ -178,10 +178,11 @@ hit the compiler error cold):
 - Each test file defines `assert_success!(parser, input, value, pos)` and `assert_failure!(parser, input, message, pos)`
   macros that check both `parse_on` and `fast_parse_on`
 - Example grammars: `tests/example-grammars/main.rs` (entry point) +
-  `json.rs` + `expr.rs` + `bibtex.rs` + `pascal.rs` (written with the `#[grammar]` proc macro —
-  each has genuinely recursive rules) + `tabular.rs` + `uri.rs` (hand-written — no recursion, so
-  no macro/`SettableParser` needed)
-- 376 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
+  `json.rs` + `expr.rs` + `bibtex.rs` + `pascal.rs` + `dart.rs` + `smalltalk/{ast,mod}.rs`
+  (written with the `#[grammar]` proc macro — each has genuinely recursive rules) + `tabular.rs` +
+  `uri.rs` (hand-written — no recursion, so no macro/`SettableParser` needed) + `math.rs` (uses
+  `ExpressionBuilder`, no `#[grammar]` needed since it has no recursive rules of its own)
+- 559 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
   call (fetches ~9600-entry `scg.bib` from GitHub) on every `cargo test` run, by deliberate choice
   (~3s, judged worth it for the coverage; not `#[ignore]`d). Needs `ureq` (dev-dependency).
 
@@ -743,9 +744,134 @@ hit the compiler error cold):
        both of which disappeared once the shape was fixed — no other tests regressed.
   - **lisp**, **prolog** — full interpreters (cons cells, environments, native functions), not
     just grammars. Substantial scope beyond parsing.
-  - **smalltalk**, **dart** (the grammar, not this project) — large grammars only (200–800+
-    lines), no eval, otherwise straightforward composition (pascal, the smallest of the three,
-    is now done — see above).
+  - **dart** (the grammar, not this project) — done (`tests/example-grammars/dart.rs`, ~180
+    rules via `#[grammar]`, 81 tests ported from dart's own `test/dart_test.dart`). Every rule —
+    including leaf lexical tokens — is typed `impl Parser<()>` throughout, a deliberate departure
+    from pascal.rs's partial value-preservation: confirmed exhaustively that
+    `dart_test.dart`'s ~570 lines never inspect any extracted parse value, only call
+    `isSuccess(input)`/`isFailure(input)` (implicit end-of-input + no-exception checks), so a
+    full erasure design loses no test coverage while sidestepping type-juggling across ~100+
+    productions. Erasure convention: every rule body ends in `.map(|_| ())` unless it's a bare
+    delegating call to an already-`()`-typed rule; a leaf construct used inline as one
+    `choiceN(...)` arm gets `.map(|_| ())` at that inline site, since `choiceN`'s arms must share
+    one value type.
+    - Rust-keyword collision: dart's rule named `type` → `dart_type` (mirrors pascal's `type` →
+      `pascal_type`).
+    - `token_str`/`token_parser` (the free helper functions outside the `#[grammar]` module) have
+      only one code path here — unlike pascal.rs's keyword-vs-plain-literal branching
+      (`Rc<dyn Parser<String>>` return type, `is_keyword` check) — because checking dart's actual
+      `grammar.dart` source confirmed its own `token()` has no keyword/word-boundary guard at all
+      (unlike dart's *pascal* grammar, which does — verified by reading both upstream sources side
+      by side before deciding, rather than assuming one dart grammar's conventions apply to
+      another). Faithfully ported as the simpler one-path version; not an improvement over
+      upstream, a fidelity check.
+    - Combinator-arity ceiling hit in three places (manually split, found by counting before
+      writing rather than via compiler errors): `class_definition()`'s native-class alternative
+      (10 seq parts → nested `choice2` of two `seq5`-pairs joined by an outer structure),
+      `non_labelled_statement()` (12 choice alternatives → outer `choice2` of two `choice6`s),
+      `assignment_operator()` (13 choice alternatives → outer `choice2` of `choice7` + `choice6`).
+    - Two transcription bugs self-caught while writing (not found via tests, since this grammar
+      has no recursive-value assertions to catch them — caught by re-reading the freshly-written
+      code against dart's source): `import_directive()`'s show/hide clause
+      (`((show|hide) selector) identifier.plusSeparated(',')).optional()`) was initially written
+      as nonsense placeholder code, and was entirely *missing* from the sibling `export`
+      alternative (a 3-part `seq3` that needed widening to `seq4`); `factory_constructor_declaration()`
+      was missing its final `formalParameterList` part (`seq4` widened to `seq5`).
+  - **smalltalk** — done (`tests/example-grammars/smalltalk/{ast,mod}.rs`, ~60 rules via
+    `#[grammar]`, 29 test functions covering all 144 `verify(...)` cases from dart's
+    `test/smalltalk_test.dart` plus the `start`/full-method smoke test). Unlike dart.rs, this
+    grammar *does* build a real AST (smalltalk_test.dart's matchers inspect `.value`/`.name`/
+    `.receiver`/`.selector`/`.selectorType`/`.arguments`/etc.), so the value-erasure trick doesn't
+    apply here.
+    - **One grammar, not two.** dart keeps `SmalltalkGrammarDefinition` (pure recognizer) and
+      `SmalltalkParserDefinition extends ...` (AST-building override) as separate classes, then
+      `verify()` runs both per case. Since the AST-building `.map()` never changes success/failure
+      (only the returned value), a second, value-erased ~50-rule copy of the same grammar would
+      carry no test signal beyond what the AST-building version's success already implies — built
+      one grammar producing real AST values directly, and folded dart's "grammar" sub-test (just
+      checks parsing doesn't throw) into the "parser" sub-test's success check.
+    - **AST design**: a single recursive `Node` enum (`Literal`/`Variable`/`Assignment`/
+      `Message`/`Cascade`/`Array`/`Block`/`Return`) plus separate `Method`/`Pragma`/`Sequence`/
+      `Literal` types (`tests/example-grammars/smalltalk/ast.rs`) — a deliberate simplification of
+      dart's class-per-node-type hierarchy (`ValueNode`/`MessageNode`/`CascadeNode`/etc., all
+      `extends`/`with` mixins). Token bookkeeping (dart's `IsSurrounded.beforeToken/afterToken`,
+      `BlockNode.separators`, `CascadeNode.semicolons`, `HasStatements.periods`) and the
+      `Visitor`/`NodeCollector` machinery are both dropped — confirmed first that
+      `smalltalk_test.dart`'s matchers never inspect any of that (only the logical shape), and
+      that `NodeCollector.allNodes(ast)`'s one use (a non-empty check) is trivially true for any
+      parsed AST, so neither carries any test signal here. dart's `selectorType` is a getter
+      derived from the selector string and argument count at read time; ported as a constructor-
+      time computation (`selector_type_of`) instead of a separately-threaded flag.
+    - **Dynamic-list flattening sidestepped entirely.** dart's `buildUnary`/`buildBinary`/
+      `buildKeyword`/`addTo<T>` exist because petitparser's untyped combinators return raw nested
+      `List<dynamic>`s that have to be walked and filtered by runtime type at AST-construction
+      time. Our statically-typed `seqN`/`mapN` combinators already produce exact tuples — every
+      "message part" rule (`unary_message`/`binary_message`/`keyword_message`) returns a plain
+      `(String, Vec<Node>)` tuple directly, and `build_message`/`build_cascade`/`build_assignment`
+      (mirroring dart's `buildMessage`/`buildCascade`/`buildAssignment`) fold those tuples with no
+      flattening step at all.
+    - **`token(source, message)`'s dynamic dispatch became two statically-typed helpers.** dart's
+      single `token()` checks at runtime whether its argument is a `String` or a `Parser`
+      (`ArgumentError` otherwise — not ported, unreachable under static typing). Split into
+      `token_str` (literal punctuation/keywords, always erased to `()`, same shape as dart.rs's
+      helper of the same name) and `token_parser` (value-preserving generalization dart.rs never
+      needed, since dart.rs erases everything to `()` but smalltalk's AST needs real values out of
+      identifier/selector/number/string tokens).
+    - **Numbers computed directly, not string-built-then-reparsed.** dart's `buildNumber` parses a
+      *string* assembled from the matched span (`numberToken().value`) back through
+      `num.parse`/`int.parse`. Ported as direct `f64` computation while parsing instead (radix
+      integers via `i64::from_str_radix`, decimals via `"{int}.{frac}".parse()`) — same result, no
+      round trip. `exponent()` faithfully requires a literal `-` (ported as-is from dart's
+      `char('-').seq(decimalInteger)`), so a positive exponent like `3e4` isn't actually reachable
+      through this grammar — untested upstream too (no `dart_test.dart` case exercises it), left
+      as-is per the "port bugs faithfully" convention rather than silently fixing it.
+    - **`binary()` uses `one_of(...)`, not `pattern(...)`.** dart's binary-selector-character rule
+      is `anyOf(r'!%&*+,-/<=>?@\|~')` — an exact character *set* (`anyOf`, our `one_of`), not a
+      range-based char class. Using `pattern(...)` here instead would have been a real bug: that
+      literal char sequence contains `,-/` and `@\|`, which a range-aware `pattern()` parser could
+      misread as range syntax (comma-to-slash); `one_of`'s exact-set semantics sidestep that
+      entirely. Caught during design, before writing the rule, by checking dart's actual
+      `anyOf`-vs-`pattern`-equivalent call rather than assuming.
+    - **`statements()`'s leading/double/trailing-period handling, verified against the real dart
+      SDK before porting.** dart's `statements()` = `(expressionReturn|expression)
+      .starSeparated(periodToken.plus()).skip(after: periodToken.star())` handles double periods
+      (`"1 . . 2"` → two statements, via the separator itself being `periodToken.plus()`, which
+      greedily eats consecutive periods as one separator) and trailing periods (`"1 . 2 . 3 ."` →
+      three statements) but conspicuously has no leading-period handling of its own — that's
+      actually `sequence()`'s job (`temporaries().seq(periodToken().star()).seq(statements())`,
+      with the middle `.star()` eating any leading periods before `statements()` ever runs); all
+      of dart's `Statements*`/`Sequence*` test cases go through `grammar.sequence`, never bare
+      `grammar.statements`, which is what makes this division of labor not show up as a gap.
+      Resolved by writing a small scratch dart program against the real SDK
+      (`dart run bin/_scratch_check.dart`, using `resolve(production()).end()` — raw `ref0(...)`
+      output has no `.end()` until resolved) to confirm `". 1"`/`".1"`/`"1 . . 2"`/`"1 . 2 . 3 ."`
+      all actually succeed before committing to a design, rather than guessing from the source
+      alone. Ported as `choice2(expression_return(), expression()).star_sep(period_token().plus(),
+      Trailing::Allowed)` for `statements()` — our existing `Trailing::Allowed` (a deliberate
+      extension beyond dart, see `SeparatedList` above) turns out to exactly reproduce dart's
+      "trailing `periodToken.star()`" behavior for free, since allowing *one* occurrence of a
+      separator that is itself `.plus()`-greedy is equivalent to allowing *zero-or-more* trailing
+      periods.
+    - **One real bug, caught immediately by a dedicated test, not deduced in advance:**
+      `comment()` was first written as `seq3(char('"'), char('"').not().star(), char('"'))` —
+      `.not()` is zero-width (a lookahead that doesn't consume), so `.star()` over it never
+      advances position and panics on the "delegate succeeded without consuming" infinite-loop
+      guard. The fix is `.neg()` (`any().skip_left(self.not_with_message(...))` — consumes one
+      character *while* checking it isn't a quote), which is what dart's `char('"').neg().star()`
+      actually uses; `.not()` and `.neg()` look similar but are not interchangeable, and this
+      grammar is the first place in the codebase that needed `.neg()` for repetition rather than a
+      one-off guard.
+    - **`seq!` macro doesn't work inside `#[grammar]` rule bodies that call other rules.** Tried
+      `seq!(period_token().star(), pragmas(), ..., |closure|)` inside `method_sequence()`; failed
+      with `E0618` (`period_token`/`pragmas`/etc. resolved to their `SettableParser<T>` *fields*,
+      not function calls) because the `#[grammar]` macro's `VisitMut` rule-name rewriter only
+      walks parsed `Expr` nodes (`Expr::Call`, recursing into its arguments) — a `seq!(...)`
+      invocation is an opaque `Expr::Macro` at that point in expansion, so the rewriter never sees
+      the zero-arg rule calls inside its token stream to rewrite them to `.borrow()`. Fixed by
+      using the explicit `seq8(...).map8(...)` form instead, which *is* plain nested `Expr::Call`s
+      the rewriter walks normally. General gotcha for future `#[grammar]` rules: prefer `seqN`/
+      `choiceN` directly over the `seq!`/`choice!` sugar macros whenever the arguments include
+      other rule calls.
   - **regexp** — a self-contained regex-engine-with-NFA project, conceptually separate from
     "porting a grammar."
   - Decided: keep self-contained grammar+test examples (tabular-shaped) in

@@ -1,7 +1,9 @@
 mod bibtex;
+mod dart;
 mod expr;
 mod json;
 mod math;
 mod pascal;
+mod smalltalk;
 mod tabular;
 mod uri;
