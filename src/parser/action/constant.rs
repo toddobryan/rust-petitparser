@@ -3,19 +3,19 @@ use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct ConstantParser<T, P, V> {
-    pub delegate: P,
+pub struct ConstantParser<T, V> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub value: V,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<T, P, V> Parser<V> for ConstantParser<T, P, V>
+impl<T, V> Parser<V> for ConstantParser<T, V>
 where
-    P: Parser<T>,
-    T: Debug,
-    V: Clone + Debug,
+    T: Debug + 'static,
+    V: Clone + Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<V> {
         self.delegate.parse_on(context).map(|s| Success {

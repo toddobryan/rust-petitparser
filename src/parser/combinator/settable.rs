@@ -33,7 +33,7 @@ impl<T> Clone for UndefinedParser<T> {
     }
 }
 
-impl<T> Parser<T> for UndefinedParser<T> {
+impl<T: 'static> Parser<T> for UndefinedParser<T> {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         context.failure(self.message.clone())
     }
@@ -82,7 +82,7 @@ impl<T> Clone for SettableParser<T> {
     }
 }
 
-impl<T> Parser<T> for SettableParser<T> {
+impl<T: 'static> Parser<T> for SettableParser<T> {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         self.delegate.borrow().parse_on(context)
     }
@@ -113,7 +113,7 @@ impl<T> Clone for SettableParserRef<T> {
     }
 }
 
-impl<T> Parser<T> for SettableParserRef<T> {
+impl<T: 'static> Parser<T> for SettableParserRef<T> {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         self.delegate
             .upgrade()

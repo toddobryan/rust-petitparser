@@ -3,18 +3,18 @@ use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct LabeledParser<P, T> {
-    pub delegate: P,
+pub struct LabeledParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub label: String,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, T> Parser<T> for LabeledParser<P, T>
+impl<T> Parser<T> for LabeledParser<T>
 where
-    P: Parser<T>,
-    T: Clone + Debug,
+    T: Clone + Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         self.delegate.parse_on(context).map_err(|mut f| {

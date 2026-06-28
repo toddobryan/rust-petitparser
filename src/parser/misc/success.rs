@@ -10,7 +10,7 @@ pub struct SuccessParser<T: Clone + Debug> {
 
 impl<T> Parser<T> for SuccessParser<T>
 where
-    T: Clone + Debug,
+    T: Clone + Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         context.success(self.result.clone())

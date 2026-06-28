@@ -2,15 +2,17 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use crate::core::token::Token;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct TokenParser<P> {
-    pub parser: P,
+pub struct TokenParser<T> {
+    pub parser: Rc<dyn Parser<T>>,
 }
 
-impl<T, P> Parser<Token<T>> for TokenParser<P>
+impl<T> Parser<Token<T>> for TokenParser<T>
 where
-    P: Parser<T>,
+    T: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Token<T>> {
         match self.parser.parse_on(context) {

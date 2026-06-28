@@ -28,7 +28,7 @@ use std::rc::Rc;
 
 pub trait ParserExt<T>: Parser<T> + Sized
 where
-    T: Debug,
+    T: Debug + 'static,
 {
     fn all_matches(self, context: Context, overlapping: bool) -> MatchesIterable<T, Self> {
         MatchesIterable {
@@ -52,39 +52,39 @@ where
         self.accept_at(input, 0_usize)
     }
 
-    fn map<U, F: Fn(T) -> U>(self, f: F) -> MapParser<T, Self, F> {
+    fn map<U, F: Fn(T) -> U + 'static>(self, f: F) -> MapParser<T, F> {
         MapParser {
-            delegate: self,
+            delegate: Rc::new(self),
             f,
             from_type: PhantomData,
         }
     }
 
-    fn constant<V>(self, value: V) -> ConstantParser<T, Self, V> {
+    fn constant<V>(self, value: V) -> ConstantParser<T, V> {
         ConstantParser {
-            delegate: self,
+            delegate: Rc::new(self),
             value,
             delegate_type: PhantomData,
         }
     }
 
-    fn rep(self, min: usize, max: Option<usize>) -> PossessiveRepeatingParser<Self> {
+    fn rep(self, min: usize, max: Option<usize>) -> PossessiveRepeatingParser<T> {
         PossessiveRepeatingParser {
-            delegate: self,
+            delegate: Rc::new(self),
             min,
             max,
         }
     }
 
-    fn rep_lazy<S: Debug>(
+    fn rep_lazy<S: Debug + 'static>(
         self,
         limit: impl Parser<S>,
         min: usize,
         max: Option<usize>,
     ) -> impl Parser<Vec<T>> {
         LazyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min,
             max,
             delegate_type: PhantomData,
@@ -99,15 +99,15 @@ where
         max: Option<usize>,
     ) -> impl Parser<Vec<T>> {
         GreedyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min,
             max,
             delegate_type: PhantomData,
         }
     }
 
-    fn rep_sep<S: Debug>(
+    fn rep_sep<S: Debug + 'static>(
         self,
         sep: impl Parser<S>,
         min: usize,
@@ -118,7 +118,7 @@ where
             .map(|sl| sl.elements)
     }
 
-    fn rep_with_sep<S: Debug>(
+    fn rep_with_sep<S: Debug + 'static>(
         self,
         sep: impl Parser<S>,
         min: usize,
@@ -126,8 +126,8 @@ where
         trailing: Trailing,
     ) -> impl Parser<SeparatedList<T, S>> {
         SeparatedListRepeatingParser {
-            delegate: self,
-            separator: sep,
+            delegate: Rc::new(self),
+            separator: Rc::new(sep),
             min,
             max,
             trailing,
@@ -136,11 +136,11 @@ where
         }
     }
 
-    fn times(self, num: usize) -> PossessiveRepeatingParser<Self> {
+    fn times(self, num: usize) -> PossessiveRepeatingParser<T> {
         self.rep(num, Some(num))
     }
 
-    fn times_sep<S: Debug>(
+    fn times_sep<S: Debug + 'static>(
         self,
         count: usize,
         sep: impl Parser<S>,
@@ -150,7 +150,7 @@ where
             .map(|sl| sl.elements)
     }
 
-    fn times_with_sep<S: Debug>(
+    fn times_with_sep<S: Debug + 'static>(
         self,
         count: usize,
         sep: impl Parser<S>,
@@ -163,11 +163,11 @@ where
         self.rep(0, None)
     }
 
-    fn star_sep<S: Debug>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+    fn star_sep<S: Debug + 'static>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
         self.rep_sep(sep, 0, None, trailing)
     }
 
-    fn star_with_sep<S: Debug>(
+    fn star_with_sep<S: Debug + 'static>(
         self,
         sep: impl Parser<S>,
         trailing: Trailing,
@@ -175,10 +175,10 @@ where
         self.rep_with_sep(sep, 0, None, trailing)
     }
 
-    fn star_lazy<L: Debug>(self, limit: impl Parser<L>) -> impl Parser<Vec<T>> {
+    fn star_lazy<L: Debug + 'static>(self, limit: impl Parser<L>) -> impl Parser<Vec<T>> {
         LazyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min: 0,
             max: None,
             delegate_type: PhantomData,
@@ -188,8 +188,8 @@ where
 
     fn star_greedy(self, limit: impl Parser<()>) -> impl Parser<Vec<T>> {
         GreedyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min: 0,
             max: None,
             delegate_type: PhantomData,
@@ -200,11 +200,11 @@ where
         self.rep(1, None)
     }
 
-    fn plus_sep<S: Debug>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+    fn plus_sep<S: Debug + 'static>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
         self.rep_sep(sep, 1, None, trailing)
     }
 
-    fn plus_with_sep<S: Debug>(
+    fn plus_with_sep<S: Debug + 'static>(
         self,
         sep: impl Parser<S>,
         trailing: Trailing,
@@ -212,10 +212,10 @@ where
         self.rep_with_sep(sep, 1, None, trailing)
     }
 
-    fn plus_lazy<S: Debug>(self, limit: impl Parser<S>) -> impl Parser<Vec<T>> {
+    fn plus_lazy<S: Debug + 'static>(self, limit: impl Parser<S>) -> impl Parser<Vec<T>> {
         LazyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min: 1,
             max: None,
             delegate_type: PhantomData,
@@ -225,8 +225,8 @@ where
 
     fn plus_greedy(self, limit: impl Parser<()>) -> impl Parser<Vec<T>> {
         GreedyRepeatingParser {
-            delegate: self,
-            limit,
+            delegate: Rc::new(self),
+            limit: Rc::new(limit),
             min: 1,
             max: None,
             delegate_type: PhantomData,
@@ -245,8 +245,10 @@ where
             .map(move |vec| vec.into_iter().next().unwrap_or(value.clone()))
     }
 
-    fn token(self) -> TokenParser<Self> {
-        TokenParser { parser: self }
+    fn token(self) -> TokenParser<T> {
+        TokenParser {
+            parser: Rc::new(self),
+        }
     }
 
     fn trim(self) -> impl Parser<T> {
@@ -257,15 +259,15 @@ where
     where
         A: Parser<Aft>,
         B: Parser<Bef>,
-        Aft: Debug,
-        Bef: Debug,
+        Aft: Debug + 'static,
+        Bef: Debug + 'static,
     {
         seq!(before, self, after => |_, val, _| val)
     }
 
     fn and(self) -> impl Parser<T> {
         AndParser {
-            delegate: self,
+            delegate: Rc::new(self),
             delegate_type: PhantomData,
         }
     }
@@ -276,7 +278,7 @@ where
 
     fn not_with_message(self, message: String) -> impl Parser<Failure> {
         NotParser {
-            delegate: self,
+            delegate: Rc::new(self),
             delegate_type: PhantomData,
             message,
         }
@@ -305,7 +307,7 @@ where
 
     fn input(self) -> impl Parser<String> {
         InputParser {
-            delegate: self,
+            delegate: Rc::new(self),
             message: None,
             delegate_type: PhantomData,
         }
@@ -313,15 +315,15 @@ where
 
     fn input_with_message(self, message: String) -> impl Parser<String> {
         InputParser {
-            delegate: self,
+            delegate: Rc::new(self),
             message: Some(message),
             delegate_type: PhantomData,
         }
     }
 
-    fn only_if(self, pred: fn(&T) -> bool) -> OnlyIfParser<Self, T> {
+    fn only_if(self, pred: fn(&T) -> bool) -> OnlyIfParser<T> {
         OnlyIfParser {
-            delegate: self,
+            delegate: Rc::new(self),
             predicate: pred,
             factory: None,
             message: None,
@@ -329,9 +331,9 @@ where
         }
     }
 
-    fn only_if_with_message(self, pred: fn(&T) -> bool, message: String) -> OnlyIfParser<Self, T> {
+    fn only_if_with_message(self, pred: fn(&T) -> bool, message: String) -> OnlyIfParser<T> {
         OnlyIfParser {
-            delegate: self,
+            delegate: Rc::new(self),
             predicate: pred,
             factory: None,
             message: Some(message),
@@ -343,9 +345,9 @@ where
         self,
         pred: fn(&T) -> bool,
         factory: fn(&Context, Success<T>) -> ParseResult<T>,
-    ) -> OnlyIfParser<Self, T> {
+    ) -> OnlyIfParser<T> {
         OnlyIfParser {
-            delegate: self,
+            delegate: Rc::new(self),
             predicate: pred,
             factory: Some(factory),
             message: None,
@@ -353,39 +355,43 @@ where
         }
     }
 
-    fn labeled(self, label: impl Into<String>) -> LabeledParser<Self, T> {
+    fn labeled(self, label: impl Into<String>) -> LabeledParser<T> {
         LabeledParser {
-            delegate: self,
+            delegate: Rc::new(self),
             label: label.into(),
             delegate_type: PhantomData,
         }
     }
 
-    fn skip<A, Aft, B, Bef>(self, before: B, after: A) -> SkipParser<A, Aft, B, Bef, Self, T>
+    fn skip<A, Aft, B, Bef>(self, before: B, after: A) -> SkipParser<Aft, Bef, T>
     where
         A: Parser<Aft>,
         B: Parser<Bef>,
+        Aft: 'static,
+        Bef: 'static,
     {
         SkipParser {
-            delegate: self,
-            before,
-            after,
+            delegate: Rc::new(self),
+            before: Rc::new(before),
+            after: Rc::new(after),
             delegate_type: PhantomData,
             before_type: PhantomData,
             after_type: PhantomData,
         }
     }
 
-    fn skip_left<B, Bef>(self, before: B) -> SkipParser<impl Parser<()>, (), B, Bef, Self, T>
+    fn skip_left<B, Bef>(self, before: B) -> SkipParser<(), Bef, T>
     where
         B: Parser<Bef>,
+        Bef: 'static,
     {
         self.skip(before, epsilon())
     }
 
-    fn skip_right<A, Aft>(self, after: A) -> SkipParser<A, Aft, impl Parser<()>, (), Self, T>
+    fn skip_right<A, Aft>(self, after: A) -> SkipParser<Aft, (), T>
     where
         A: Parser<Aft>,
+        Aft: 'static,
     {
         self.skip(epsilon(), after)
     }
@@ -394,35 +400,35 @@ where
         self.skip_right(eof())
     }
 
-    fn flat_map<P2, T2>(self, f: fn(&T) -> P2) -> FlatMapParser<Self, P2, T, T2> {
+    fn flat_map<P2, T2>(self, f: fn(&T) -> P2) -> FlatMapParser<P2, T, T2> {
         FlatMapParser {
-            delegate: self,
+            delegate: Rc::new(self),
             f,
             delegate_type: PhantomData,
             result_type: PhantomData,
         }
     }
 
-    fn pick<E>(self, index: i32) -> PickParser<Self, T, E>
+    fn pick<E>(self, index: i32) -> PickParser<T, E>
     where
         T: IntoIterator<Item = E>,
         E: Clone + Debug,
     {
         PickParser {
-            delegate: self,
+            delegate: Rc::new(self),
             index,
             delegate_type: PhantomData,
             iterator_type: PhantomData,
         }
     }
 
-    fn elements_at<E>(self, indexes: Vec<i32>) -> ElementsAtParser<Self, T, E>
+    fn elements_at<E>(self, indexes: Vec<i32>) -> ElementsAtParser<T, E>
     where
         T: IntoIterator<Item = E>,
         E: Clone + Debug,
     {
         ElementsAtParser {
-            delegate: self,
+            delegate: Rc::new(self),
             indexes,
             delegate_type: PhantomData,
             iterator_type: PhantomData,
@@ -430,7 +436,7 @@ where
     }
 
     /// alias for elements_at to match Dart usage
-    fn permute<E>(self, indexes: Vec<i32>) -> ElementsAtParser<Self, T, E>
+    fn permute<E>(self, indexes: Vec<i32>) -> ElementsAtParser<T, E>
     where
         T: IntoIterator<Item = E>,
         E: Clone + Debug,
@@ -439,7 +445,7 @@ where
     }
 }
 
-impl<T, P: Parser<T>> ParserExt<T> for P where T: Debug {}
+impl<T, P: Parser<T>> ParserExt<T> for P where T: Debug + 'static {}
 
 pub trait CharacterRepeatingParserExt: Parser<char> + Sized {
     fn rep_string(self, min: usize, max: Option<usize>) -> impl Parser<String> {
@@ -465,16 +471,16 @@ macro_rules! impl_map_tuple {
     ($trait_name:ident, $method:ident, $(($value:ident, $field:ident)),+ $(,)?) => {
         pub trait $trait_name<$($value),+>: Parser<($($value,)+)> + Sized
         where
-            $($value: Debug,)+
+            $($value: Debug + 'static,)+
         {
-            fn $method<U>(self, f: impl Fn($($value),+) -> U) -> impl Parser<U> {
+            fn $method<U: 'static>(self, f: impl Fn($($value),+) -> U + 'static) -> impl Parser<U> {
                 self.map(move |($($field,)+)| f($($field),+))
             }
         }
 
         impl<$($value),+, P: Parser<($($value,)+)>> $trait_name<$($value),+> for P
         where
-            $($value: Debug,)+
+            $($value: Debug + 'static,)+
         {}
     };
 }

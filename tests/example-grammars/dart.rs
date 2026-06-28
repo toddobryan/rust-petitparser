@@ -6,8 +6,8 @@ use std::fmt::Debug;
 
 fn token_parser<T, S, P>(p: impl Parser<T>, spacer: P) -> impl Parser<()>
 where
-    T: Debug,
-    S: Debug,
+    T: Debug + 'static,
+    S: Debug + 'static,
     P: Parser<S> + Clone,
 {
     p.trim_with(spacer.clone().star(), spacer.star())
@@ -16,7 +16,7 @@ where
 
 fn token_str<S, P>(literal: &'static str, spacer: P) -> impl Parser<()>
 where
-    S: Debug,
+    S: Debug + 'static,
     P: Parser<S> + Clone,
 {
     token_parser(string(literal), spacer)

@@ -41,8 +41,8 @@ impl<T, T2, H> Debug for ContinuationParser<T, T2, H> {
 impl<T, T2, H> Parser<T2> for ContinuationParser<T, T2, H>
 where
     T: Debug + 'static,
-    T2: Debug,
-    H: Fn(Continuation<T>, &Context) -> ParseResult<T2>,
+    T2: Debug + 'static,
+    H: Fn(Continuation<T>, &Context) -> ParseResult<T2> + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T2> {
         let delegate = self.delegate.clone();

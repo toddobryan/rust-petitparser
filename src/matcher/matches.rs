@@ -12,6 +12,7 @@ pub struct MatchesIterator<T, P> {
 impl<T, P> Iterator for MatchesIterator<T, P>
 where
     P: Parser<T>,
+    T: 'static,
 {
     type Item = T;
 
@@ -45,6 +46,7 @@ pub struct MatchesIterable<T, P> {
 impl<T, P> IntoIterator for MatchesIterable<T, P>
 where
     P: Parser<T>,
+    T: 'static,
 {
     type Item = T;
     type IntoIter = MatchesIterator<Self::Item, P>;

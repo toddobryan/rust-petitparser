@@ -3,22 +3,22 @@ use crate::core::parser::Parser;
 use crate::core::result::{Failure, ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 type FactoryFn<T> = fn(&Context, Success<T>) -> ParseResult<T>;
 
 #[derive(Clone, Debug)]
-pub struct OnlyIfParser<P, T> {
-    pub delegate: P,
+pub struct OnlyIfParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub predicate: fn(&T) -> bool,
     pub message: Option<String>,
     pub factory: Option<FactoryFn<T>>,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, T> OnlyIfParser<P, T>
+impl<T> OnlyIfParser<T>
 where
-    P: Parser<T>,
-    T: Debug,
+    T: Debug + 'static,
 {
     fn make_factory(&self, context: &Context, result: Success<T>) -> ParseResult<T> {
         match self.factory {
@@ -34,10 +34,9 @@ where
     }
 }
 
-impl<P, T> Parser<T> for OnlyIfParser<P, T>
+impl<T> Parser<T> for OnlyIfParser<T>
 where
-    P: Parser<T>,
-    T: Clone + Debug,
+    T: Clone + Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         let result = self.delegate.parse_on(context)?;

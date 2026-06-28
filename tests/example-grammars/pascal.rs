@@ -50,8 +50,8 @@ fn is_keyword(literal: &str) -> bool {
 
 fn token_parser<T, S, P>(p: impl Parser<T>, spacer: P) -> impl Parser<T>
 where
-    T: Debug,
-    S: Debug,
+    T: Debug + 'static,
+    S: Debug + 'static,
     P: Parser<S> + Clone,
 {
     // `spacer` itself requires one-or-more whitespace/comment units (mirroring dart's

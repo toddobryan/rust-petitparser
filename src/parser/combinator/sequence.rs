@@ -2,17 +2,27 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use crate::core::result::Success;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 macro_rules! impl_seq {
     ($name:ident, $func:ident, $(($parser:ident, $value:ident, $field:ident)),+$(,)?) => {
-        #[derive(Clone, Debug)]
-        pub struct $name<$($parser),+> {
-            $(pub $field: $parser, )+
+        #[derive(Debug)]
+        pub struct $name<$($value),+> {
+            $(pub $field: Rc<dyn Parser<$value>>, )+
         }
 
-        impl <$($value),+ , $($parser),+> Parser<($($value,)+)> for $name<$($parser),+>
+        // Manual `Clone` so the bound is just the cheap `Rc::clone` — `#[derive(Clone)]` would
+        // spuriously require every value type to be `Clone`.
+        impl <$($value),+> Clone for $name<$($value),+> {
+            fn clone(&self) -> Self {
+                $name { $($field: self.$field.clone(),)+ }
+            }
+        }
+
+        impl <$($value),+> Parser<($($value,)+)> for $name<$($value),+>
         where
-            $($parser: Parser<$value>,)+
+            $($value: Debug + 'static,)+
         {
             fn parse_on(&self, context: &Context) -> ParseResult<($($value,)+)> {
                 let mut ctx = context.clone();
@@ -26,8 +36,12 @@ macro_rules! impl_seq {
         }
 
         #[allow(clippy::too_many_arguments)]
-        pub fn $func<$($parser),+>($($field: $parser,)+) -> $name<$($parser),+> {
-            $name { $($field,)+ }
+        pub fn $func<$($parser),+, $($value),+>($($field: $parser,)+) -> $name<$($value),+>
+        where
+            $($value: 'static,)+
+            $($parser: Parser<$value> + 'static,)+
+        {
+            $name { $($field: Rc::new($field),)+ }
         }
     };
 }

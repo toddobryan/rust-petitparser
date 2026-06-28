@@ -3,23 +3,22 @@ use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct LazyRepeatingParser<P, T, PC, TC> {
-    pub delegate: P,
-    pub limit: PC,
+pub struct LazyRepeatingParser<T, TC> {
+    pub delegate: Rc<dyn Parser<T>>,
+    pub limit: Rc<dyn Parser<TC>>,
     pub min: usize,
     pub max: Option<usize>,
     pub delegate_type: PhantomData<T>,
     pub limit_type: PhantomData<TC>,
 }
 
-impl<P, T, PC, TC> Parser<Vec<T>> for LazyRepeatingParser<P, T, PC, TC>
+impl<T, TC> Parser<Vec<T>> for LazyRepeatingParser<T, TC>
 where
-    P: Parser<T>,
-    PC: Parser<TC>,
-    T: Debug,
-    TC: Debug,
+    T: Debug + 'static,
+    TC: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let mut elements: Vec<T> = Vec::new();

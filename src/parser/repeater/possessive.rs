@@ -2,17 +2,18 @@ use crate::core::context::{Context, HasContext};
 use crate::core::parser::Parser;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct PossessiveRepeatingParser<P> {
-    pub delegate: P,
+pub struct PossessiveRepeatingParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub min: usize,
     pub max: Option<usize>,
 }
 
-impl<T, P> Parser<Vec<T>> for PossessiveRepeatingParser<P>
+impl<T> Parser<Vec<T>> for PossessiveRepeatingParser<T>
 where
-    P: Parser<T>,
+    T: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let mut elements: Vec<T> = vec![];

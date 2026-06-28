@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 use crate::core::{
     context::Context,
@@ -8,18 +9,17 @@ use crate::core::{
 };
 
 #[derive(Clone, Debug)]
-pub struct ElementsAtParser<P, I, T> {
-    pub delegate: P,
+pub struct ElementsAtParser<I, T> {
+    pub delegate: Rc<dyn Parser<I>>,
     pub indexes: Vec<i32>,
     pub iterator_type: PhantomData<I>,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, I, T> Parser<Vec<T>> for ElementsAtParser<P, I, T>
+impl<I, T> Parser<Vec<T>> for ElementsAtParser<I, T>
 where
-    P: Parser<I>,
-    I: Debug + IntoIterator<Item = T>,
-    T: Clone + Debug,
+    I: Debug + IntoIterator<Item = T> + 'static,
+    T: Clone + Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let success: Success<I> = self.delegate.parse_on(context)?;

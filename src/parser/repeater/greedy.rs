@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 use crate::core::{
     context::{Context, HasContext},
@@ -8,19 +9,17 @@ use crate::core::{
 };
 
 #[derive(Clone, Debug)]
-pub struct GreedyRepeatingParser<P, T, PC> {
-    pub delegate: P,
-    pub limit: PC,
+pub struct GreedyRepeatingParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
+    pub limit: Rc<dyn Parser<()>>,
     pub min: usize,
     pub max: Option<usize>,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, T, PC> Parser<Vec<T>> for GreedyRepeatingParser<P, T, PC>
+impl<T> Parser<Vec<T>> for GreedyRepeatingParser<T>
 where
-    P: Parser<T>,
-    T: Debug,
-    PC: Parser<()>,
+    T: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<T>> {
         let mut elements: Vec<T> = Vec::new();

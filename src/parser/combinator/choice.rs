@@ -2,19 +2,28 @@ use crate::core::context::Context;
 use crate::core::parser::Parser;
 use crate::core::result::Failure;
 use crate::core::result::ParseResult;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 macro_rules! choice_impl {
     ($name:ident, $func:ident, $(($parser:ident , $value:ident)),+) => {
-        #[derive(Clone, Debug)]
-        pub struct $name<$($parser,)+> {
-            $(pub $value: $parser,)+
+        // Every alternative shares the same value type `T`, so the struct is generic over `T`
+        // alone and each delegate is stored as `Rc<dyn Parser<T>>`.
+        #[derive(Debug)]
+        pub struct $name<T> {
+            $(pub $value: Rc<dyn Parser<T>>,)+
             pub joiner: FailureJoiner,
         }
 
-        impl <T, $($parser),+> Parser<T> for $name<$($parser),+>
-        where
-            $($parser: Parser<T>,)+
-        {
+        // Manual `Clone` so the bound is just the cheap `Rc::clone` — `#[derive(Clone)]` would
+        // spuriously require `T: Clone`.
+        impl<T> Clone for $name<T> {
+            fn clone(&self) -> Self {
+                $name { $($value: self.$value.clone(),)+ joiner: self.joiner }
+            }
+        }
+
+        impl <T: Debug + 'static> Parser<T> for $name<T> {
             fn parse_on(&self, context: &Context) -> ParseResult<T> {
                 let mut failure: Option<Failure> = None;
                 $(
@@ -33,8 +42,12 @@ macro_rules! choice_impl {
         }
 
         #[allow(clippy::too_many_arguments)]
-        pub fn $func<$($parser),+>($($value: $parser,)+) -> $name<$($parser),+> {
-            $name { $($value,)+ joiner: SELECT_FARTHEST }
+        pub fn $func<T, $($parser),+>($($value: $parser,)+) -> $name<T>
+        where
+            T: 'static,
+            $($parser: Parser<T> + 'static,)+
+        {
+            $name { $($value: Rc::new($value),)+ joiner: SELECT_FARTHEST }
         }
     };
 }

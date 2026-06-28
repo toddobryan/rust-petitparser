@@ -4,17 +4,17 @@ use crate::core::result::{Failure, ParseResult, Success};
 use crate::prelude::HasContext;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct AndParser<T, P> {
-    pub delegate: P,
+pub struct AndParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<T, P> Parser<T> for AndParser<T, P>
+impl<T> Parser<T> for AndParser<T>
 where
-    P: Parser<T>,
-    T: Debug,
+    T: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         let result = self.delegate.parse_on(context);
@@ -29,16 +29,15 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct NotParser<T, P> {
-    pub delegate: P,
+pub struct NotParser<T> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub delegate_type: PhantomData<T>,
     pub message: String,
 }
 
-impl<T, P> Parser<Failure> for NotParser<T, P>
+impl<T> Parser<Failure> for NotParser<T>
 where
-    P: Parser<T>,
-    T: Debug,
+    T: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<Failure> {
         let result = self.delegate.parse_on(context);

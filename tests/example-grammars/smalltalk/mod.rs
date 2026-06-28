@@ -39,8 +39,8 @@ use std::fmt::Debug;
 
 fn token_parser<T, S, P>(p: impl Parser<T>, spacer: P) -> impl Parser<T>
 where
-    T: Debug,
-    S: Debug,
+    T: Debug + 'static,
+    S: Debug + 'static,
     P: Parser<S> + Clone,
 {
     p.trim_with(spacer.clone().star(), spacer.star())
@@ -48,7 +48,7 @@ where
 
 fn token_str<S, P>(literal: &'static str, spacer: P) -> impl Parser<()>
 where
-    S: Debug,
+    S: Debug + 'static,
     P: Parser<S> + Clone,
 {
     token_parser(string(literal), spacer).constant(())
@@ -624,7 +624,7 @@ mod tests {
     use googletest::prelude::*;
     use std::fmt::Debug;
 
-    fn verify<T: Debug + PartialEq>(production: impl Parser<T>, source: &str, expected: T) {
+    fn verify<T: Debug + PartialEq + 'static>(production: impl Parser<T>, source: &str, expected: T) {
         let result = production.end().parse(source);
         let success =
             result.unwrap_or_else(|e| panic!("expected success for {source:?}, got {e:?}"));

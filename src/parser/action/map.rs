@@ -3,19 +3,16 @@ use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct MapParser<T, P, F> {
-    pub delegate: P,
+pub struct MapParser<T, F> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub f: F,
     pub from_type: PhantomData<T>,
 }
 
-impl<T, U, P, F> Debug for MapParser<T, P, F>
-where
-    P: Parser<T>,
-    F: Fn(T) -> U,
-{
+impl<T: 'static, F> Debug for MapParser<T, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MapParser")
             .field("delegate", &self.delegate)
@@ -25,10 +22,11 @@ where
     }
 }
 
-impl<T, U, P, F> Parser<U> for MapParser<T, P, F>
+impl<T, U, F> Parser<U> for MapParser<T, F>
 where
-    P: Parser<T>,
-    F: Fn(T) -> U,
+    T: 'static,
+    U: 'static,
+    F: Fn(T) -> U + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<U> {
         self.delegate.parse_on(context).map(|s| Success {

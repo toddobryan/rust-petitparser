@@ -3,18 +3,16 @@ use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct InputParser<P, T: Debug> {
-    pub delegate: P,
+pub struct InputParser<T: Debug> {
+    pub delegate: Rc<dyn Parser<T>>,
     pub message: Option<String>,
     pub delegate_type: PhantomData<T>,
 }
 
-impl<P, T: Debug> Parser<String> for InputParser<P, T>
-where
-    P: Parser<T>,
-{
+impl<T: Debug + 'static> Parser<String> for InputParser<T> {
     fn parse_on(&self, context: &Context) -> ParseResult<String> {
         match &self.message {
             Some(m) => {

@@ -3,6 +3,7 @@ use crate::core::parser::Parser;
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 /// whether in a list of the form elem sep elem sep elem ...
 /// the final element must, can, or cannot be followed by a separator
@@ -107,9 +108,9 @@ impl<T: Display, Sep: Display> Display for SeparatedList<T, Sep> {
 }
 
 #[derive(Clone, Debug)]
-pub struct SeparatedListRepeatingParser<P, T, S, Sep> {
-    pub delegate: P,
-    pub separator: S,
+pub struct SeparatedListRepeatingParser<T, Sep> {
+    pub delegate: Rc<dyn Parser<T>>,
+    pub separator: Rc<dyn Parser<Sep>>,
     pub min: usize,
     pub max: Option<usize>,
     pub trailing: Trailing,
@@ -117,12 +118,10 @@ pub struct SeparatedListRepeatingParser<P, T, S, Sep> {
     pub separator_type: PhantomData<Sep>,
 }
 
-impl<P, T, S, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<P, T, S, Sep>
+impl<T, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<T, Sep>
 where
-    P: Parser<T>,
-    S: Parser<Sep>,
-    T: Debug,
-    Sep: Debug,
+    T: Debug + 'static,
+    Sep: Debug + 'static,
 {
     fn parse_on(&self, context: &Context) -> ParseResult<SeparatedList<T, Sep>> {
         let mut elements: Vec<T> = vec![];
