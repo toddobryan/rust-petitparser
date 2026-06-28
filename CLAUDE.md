@@ -69,6 +69,7 @@ src/
       separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
       lazy.rs        - LazyRepeatingParser<P, T, PC, TC> { delegate, limit, min, max }
     predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
+    regex.rs      - RegexParser, RegexMatch, regex(&str)
     ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
                     token, trim, input, input_with_message, only_if, only_if_with_message,
                     only_if_with_factory, all_matches, and, not, labeled, skip,
@@ -704,28 +705,76 @@ hit the compiler error cold):
     *end* context, position 3) instead of the starting context — `TokenParser`'s actual
     implementation correctly uses the start context for `Token.context` with `end` held
     separately, so the test's own expected value was wrong, not the implementation.
-  - `regex = "1.12.4"` is already in `Cargo.toml` as a dependency, added in anticipation of the
-    `PatternParser` port, but no regex-parser code has been written yet — deliberately paused
-    (mid-design) to land this `Context`/`Token`/`fast_parse_on` plumbing refactor cleanly first.
-    Picking the regex port back up is the immediate next step (see "What's Next").
+  - `regex = "1.12.4"` was added to `Cargo.toml` in anticipation of the `PatternParser` port (see
+    below) and is now actually used by `src/parser/regex.rs`.
+- **Ported dart's regex-backed `PatternParser`** (`lib/src/parser/predicate/pattern.dart`) as
+  `src/parser/regex.rs` — scoped to `regex::Regex` specifically rather than dart's fully generic
+  `Pattern` (String or RegExp); a literal-string pattern is better served by this codebase's
+  existing `string()`. `regex(pattern: &str) -> RegexParser` is the bare constructor (named
+  `regex`, not `pattern`, since `pattern()` was already taken by the char-class primitive);
+  `RegexParser { regex: Regex, message: String }`'s fields are public, so a pre-compiled
+  `regex::Regex` can also be passed directly (mirrors dart's "pass a compiled pattern instance"
+  constructor, avoiding per-parse recompilation). Result type `RegexMatch { text: String, start:
+  usize, end: usize, groups: Vec<Option<String>> }` mirrors dart's `Match` (`isPatternMatch` in
+  dart's test matchers: `.group(0)`/`.start`/`.end`/`.group(1+i)` for captures) — `start`/`end`
+  are **char-indexed** (not byte-indexed), matching this codebase's existing convention. `groups`
+  is `Vec<Option<String>>`, not `Vec<String>`, because a capture group can either not participate
+  in a match at all (`None`, e.g. `(x)?` against input with no `x`) or participate but match the
+  empty string (`Some(String::new())`, e.g. `(x*)`) — these are observably different and dart's
+  nullable `match.group(i)` makes the same distinction; both cases get dedicated tests
+  (`regex_non_participating_optional_group_is_none`/`regex_optional_group_matching_empty_string_is_some_empty`
+  in `tests/character_tests.rs`). The `ignoreCase`/`unicode` flags dart's `RegExp` constructor
+  exposes aren't handled specially by `RegexParser` itself — same as dart, where they live on the
+  `RegExp`/`Pattern` object passed in, not on `PatternParser` — and Rust's `char` being a full
+  Unicode scalar value already sidesteps the UTF-16-surrogate-pair concern dart's `unicode:` flag
+  exists for.
+  - **Anchoring**: `regex`'s `find_at`/`captures_at` find the next match *at or after* a byte
+    offset, not *exactly at* it (unlike dart's `Pattern.matchAsPrefix`, which is truly anchored).
+    Both `parse_on` and `fast_parse_on` check `match.start() == byte_pos` after the call; a match
+    starting later is a parse failure even though `find_at` "found something."
+  - **Byte/char offset translation, and a real bug caught only by a dedicated Unicode test**: the
+    `regex` crate operates on UTF-8 byte offsets; this codebase indexes by char throughout. A
+    `byte_pos(context)` helper (`context.text.char_indices().nth(context.position).map(|(b,
+    _)| b).unwrap_or(context.text.len())`) converts the incoming char position to the byte offset
+    `find_at`/`captures_at` need — the `.unwrap_or(text.len())` matters because `char_indices()`
+    has no entry for "one past the last char," which is otherwise a legitimate position to search
+    from (e.g. a pattern that can match empty). The first draft used this same `byte_pos` value
+    directly as `RegexMatch.start`/`.end` and as the resulting `Context`'s new position — silently
+    correct for pure-ASCII input (where byte and char offsets coincide) but wrong for anything
+    else: parsing `"日12"` (3 chars) starting at char position 1 produced `RegexMatch { start: 3,
+    end: 5 }` and a resulting position of 5 — past the end of a 3-char buffer, which would panic
+    on the next parse step. None of dart's own `PatternParser` tests catch this class of bug at
+    all (dart strings have no byte/char distinction to get wrong), so it needed a dedicated,
+    port-specific regression test with a non-ASCII prefix
+    (`regex_start_and_end_are_char_indexed_not_byte_indexed`/
+    `regex_fast_parse_on_position_is_char_indexed_not_byte_indexed` in `tests/character_tests.rs`)
+    to catch at all. Fixed by keeping `byte_pos` scoped to indexing into `context.text`/calling
+    `find_at`/`captures_at`, while `RegexMatch.start`/the new `Context` position are computed from
+    `context.position` (the original char position) and the matched text's `.chars().count()`,
+    never from `byte_pos` directly. Only the overall match's start/end positions need this
+    translation — capture-group *text* itself (`m.as_str().to_string()`) needs none.
+  - **`groups` excludes the full match (group 0)**, via `captures.iter().skip(1)` — the `regex`
+    crate's `Captures::iter()` includes group 0 first, but dart's `groups` (per `isPatternMatch`'s
+    `List.generate(match.groupCount, (g) => match.group(1 + g))`) deliberately excludes it, and
+    `RegexMatch.text` already covers the same information. An early draft kept group 0 in and
+    compensated for the mismatch in the test helper instead (prepending the expected full-match
+    text into the expected `groups` vector) — passed against the draft implementation, but wasn't
+    actually dart parity. Fixed by skipping group 0 in the real implementation and simplifying the
+    test helper back down once the real fix landed.
+  - **`fast_parse_on` uses `find_at`, not `captures_at`** — `parse_on` needs `captures_at` to
+    extract capture-group text, but `fast_parse_on` only needs the overall match's bounds, so the
+    cheaper `find_at` (no capture-group span bookkeeping) avoids paying for work the fast path
+    doesn't use, the same "fast path skips slow-path-only work" principle already established for
+    `Map`/`Constant`/`Token` (see the `fast_parse_on` side-effect-gap fix elsewhere in this doc).
+  - Tested in `tests/character_tests.rs`'s `regex` section: `regex_test`/`regex_groups` port
+    dart's `parser_predicate_test.dart` 'regexp'/'regexp groups' groups verbatim (dart's 'string'
+    sub-test, a literal-string `Pattern`, isn't ported — out of scope per the `string()` note
+    above); plus the `None`-vs-`Some("")` group tests, the two Unicode position-correctness
+    regression tests, and `regex_bare_constructor_builds_default_message` (the `regex(&str)`
+    constructor itself wasn't exercised by the dart-ported tests, which all construct
+    `RegexParser` directly with a custom message).
 
 ## What's Next
-- **Resume porting dart's regex-backed `PatternParser`** (`lib/src/parser/predicate/pattern.dart`
-  in the dart-petitparser reference checkout) — paused mid-design to land the `Context`
-  `text`/`fast_parse_on`/`Token` refactor above first, which was specifically motivated by this
-  port (the `regex` crate needs a `&str`/byte-offset view of the input, now available via
-  `Context.text`/`Context::new`, without forcing a rebuild on every match attempt). Design
-  sketched but not yet implemented: a `RegexMatch { text: String, start: usize, end: usize,
-  groups: Vec<Option<String>> }` value type with **char-indexed** (not byte-indexed) `start`/`end`
-  to match this codebase's existing char-index convention (required for Unicode/emoji
-  correctness), and a `RegexParser { regex: Regex, message: String }` taking an already-compiled
-  `regex::Regex` (mirroring dart's "pass a compiled pattern instance" constructor). Needs an
-  anchored-match check (`regex`'s `find_at` finds the next match *at or after* a byte offset, not
-  *exactly at* it — a match starting later must be treated as a parse failure even though
-  `find_at` "found something") and char/byte offset translation at the boundary
-  (`haystack.char_indices().nth(position)` to go in, `haystack[start..end].chars().count()` to
-  come back out) — capture-group text itself needs no translation, only the overall match's
-  start/end positions do.
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
   are already covered by `tests/example-grammars/{json,expr}.rs`. Done so far: **tabular**

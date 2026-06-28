@@ -1,4 +1,5 @@
 use googletest::prelude::*;
+use regex::Regex;
 use rust_petitparser::prelude::*;
 use rust_petitparser::{assert_failure, assert_success};
 
@@ -769,4 +770,114 @@ fn one_of_with_message() {
 fn none_of_with_message() {
     let p = none_of("02468").with_message("no even digit");
     assert_failure!(p, "2", "no even digit", 0);
+}
+
+// regex
+
+fn re_match(value: &str, start: usize, end: usize, groups: Vec<&str>) -> RegexMatch {
+    RegexMatch {
+        text: value.to_string(),
+        start,
+        end,
+        groups: groups.iter().map(|s| Some(s.to_string())).collect(),
+    }
+}
+
+#[gtest]
+fn regex_test() {
+    let regex = Regex::new(r"\d+").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "digits expected".to_string(),
+    };
+    // The vectors are empty in this set of tests because `\d+` has no
+    // capture groups -- groups excludes the full match (group 0), which is
+    // already available via `text`.
+    assert_success!(p, "1", &re_match("1", 0, 1, vec!()), 1);
+    assert_success!(p, "12", &re_match("12", 0, 2, vec!()), 2);
+    assert_success!(p, "123", &re_match("123", 0, 3, vec!()), 3);
+    assert_success!(p, "1a", &re_match("1", 0, 1, vec!()), 1);
+    assert_failure!(p, "", "digits expected", 0);
+    assert_failure!(p, "a", "digits expected", 0);
+    assert_failure!(p, "a1", "digits expected", 0);
+}
+
+#[gtest]
+fn regex_groups() {
+    let regex = Regex::new(r"(\d+)\s*,\s*(\d+)").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "pair expected".to_string(),
+    };
+    assert_success!(p, "1,2", &re_match("1,2", 0, 3, vec!("1", "2")), 3);
+    assert_success!(p, "1, 2", &re_match("1, 2", 0, 4, vec!("1", "2")), 4);
+    assert_success!(p, "1 ,2", &re_match("1 ,2", 0, 4, vec!("1", "2")), 4);
+    assert_success!(p, "1 , 2", &re_match("1 , 2", 0, 5, vec!("1", "2")), 5);
+    assert_success!(p, "12,3", &re_match("12,3", 0, 4, vec!("12", "3")), 4);
+    assert_success!(p, "12, 3", &re_match("12, 3", 0, 5, vec!("12", "3")), 5);
+    assert_success!(p, "12, 3", &re_match("12, 3", 0, 5, vec!("12", "3")), 5);
+}
+
+#[gtest]
+fn regex_non_participating_optional_group_is_none() {
+    // "(x)?" can simply not participate in the match at all (distinct from
+    // matching an empty string) -- dart's `match.group(i)` is null in this
+    // case, which is exactly why RegexMatch.groups is Vec<Option<String>>.
+    let regex = Regex::new(r"(\d+)(x)?").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "match expected".to_string(),
+    };
+    let success = p.parse_on(&Context::new("12", 0)).unwrap();
+    assert_that!(success.value.groups.last().unwrap(), eq(&None));
+}
+
+#[gtest]
+fn regex_optional_group_matching_empty_string_is_some_empty() {
+    // "(x*)" can match zero x's -- it still participates (unlike the case
+    // above), so the group is `Some("")`, not `None`.
+    let regex = Regex::new(r"(\d+)(x*)").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "match expected".to_string(),
+    };
+    let success = p.parse_on(&Context::new("12", 0)).unwrap();
+    assert_that!(
+        success.value.groups.last().unwrap(),
+        eq(&Some(String::new()))
+    );
+}
+
+#[gtest]
+fn regex_start_and_end_are_char_indexed_not_byte_indexed() {
+    // "日" is 3 bytes but 1 char. Starting the parse at char position 1 must
+    // not leak byte offsets into RegexMatch.start/.end or the resulting
+    // Context's position.
+    let regex = Regex::new(r"\d+").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "digits expected".to_string(),
+    };
+    let success = p.parse_on(&Context::new("日12", 1)).unwrap();
+    assert_that!(success.value, eq(&re_match("12", 1, 3, vec!())));
+    assert_that!(success.context.position, eq(3));
+}
+
+#[gtest]
+fn regex_fast_parse_on_position_is_char_indexed_not_byte_indexed() {
+    let regex = Regex::new(r"\d+").unwrap();
+    let p = RegexParser {
+        regex,
+        message: "digits expected".to_string(),
+    };
+    let pos = p.fast_parse_on(&Context::new("日12", 1));
+    assert_that!(pos, eq(Some(3)));
+}
+
+#[gtest]
+fn regex_bare_constructor_builds_default_message() {
+    let p = regex(r"\d+");
+    assert_success!(p, "12", &re_match("12", 0, 2, vec!()), 2);
+    let failure = p.parse("a").unwrap_err();
+    assert_that!(failure.message, eq(&format!("regex {:?} to match", r"\d+")));
 }
