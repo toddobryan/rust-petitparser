@@ -55,7 +55,7 @@ where
 }
 
 #[grammar]
-mod smalltalk_grammar {
+pub mod smalltalk_grammar {
     use super::*;
 
     pub fn start() -> impl Parser<Method> {
