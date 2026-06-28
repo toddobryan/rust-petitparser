@@ -1098,8 +1098,11 @@ hit the compiler error cold):
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
   Deferred (needs new features, scope B/C):
-  regex char parsers, reflection/introspection
-  (`children`, `copy`, deep-equality — needed for dart's `expectParserInvariants` assertions).
+  reflection/introspection (`children`, `copy`, deep-equality — needed for dart's
+  `expectParserInvariants` assertions, and the only thing blocking porting dart's `math.dart`
+  example's `linter` test group, skipped for exactly this reason during that port — see
+  "Porting `dart-petitparser-examples`" above). Regex char parsers are no longer in this deferred
+  list — see "Ported dart's regex-backed `PatternParser`" above.
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
