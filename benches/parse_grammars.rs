@@ -69,16 +69,22 @@ fn smalltalk_source(stmts: usize) -> String {
 
 fn bench_dart(c: &mut Criterion) {
     let g = DartGrammar::new();
-    let input = dart_source(40);
-    let ctx = Context::new(&input, 0);
-    // Fail loudly if the assembled input doesn't actually parse, rather than
-    // silently benchmarking the error path.
-    assert!(g.parse(&input).is_ok(), "dart bench input must parse");
-
     let mut group = c.benchmark_group("dart");
-    group.bench_function("parse", |b| {
-        b.iter(|| black_box(g.parse_on(black_box(&ctx))))
-    });
+
+    // Parse at a few input sizes (in "units"; one unit ~= one class + one function) to see
+    // whether the dispatch regression holds, grows, or shrinks as the workload scales. The
+    // synthetic input parses linearly with no dead-end backtracking, unlike real Dart files.
+    for units in [40usize, 160, 320] {
+        let input = dart_source(units);
+        let ctx = Context::new(&input, 0);
+        // Fail loudly if the assembled input doesn't actually parse, rather than silently
+        // benchmarking the error path.
+        assert!(g.parse(&input).is_ok(), "dart bench input must parse");
+        group.bench_function(format!("parse/{units}"), |b| {
+            b.iter(|| black_box(g.parse_on(black_box(&ctx))))
+        });
+    }
+
     group.bench_function("build", |b| b.iter(|| black_box(DartGrammar::new())));
     group.finish();
 }
