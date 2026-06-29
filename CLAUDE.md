@@ -35,8 +35,8 @@ crate. Single `Cargo.lock` at the root.
 
 `src/lib.rs` keeps `core`/`matcher`/`parser` as `pub(crate)`; the only public surface is
 `pub mod prelude` plus a re-export of `grammar`. Downstream code (and the example grammars) does
-`use rust_petitparser::prelude::*;` — the prelude re-exports the `Parser` trait, `ParserExt`,
-`Context`/`Success`/`Failure`/`ParseResult`, `Token`, all parser constructors, the
+`use rust_petitparser::prelude::*;` — the prelude re-exports the `Parser` trait, `HasChildren`,
+`ParserExt`, `Context`/`Success`/`Failure`/`ParseResult`, `Token`, all parser constructors, the
 `assert_success!`/`assert_failure!` macros, and `grammar`.
 
 ## Module Structure
@@ -45,29 +45,29 @@ src/
   prelude.rs    - public re-export surface (see Workspace Layout)
   core/
     context.rs    - Context, Success, Failure, ParseResult
-    parser.rs     - Parser trait
+    parser.rs     - Parser<T> trait + HasChildren supertrait (see "Storage model" section)
     result.rs     - ParseResult type alias
     token.rs      - Token<T>, line_and_column_of, position_string
     test_helpers.rs
   parser/
     character.rs  - CharParser, PredicateCharParser, any(), char(), letter(), digit(), one_of(), etc.
     combinator/
-      choice.rs     - Choice2-9 via choice_impl! macro
-      sequence.rs   - Seq2-9 via impl_seq! macro
+      choice.rs     - Choice2-11 via choice_impl! macro (generic over value type T only)
+      sequence.rs   - Seq2-9 via impl_seq! macro (generic over value types T1..Tn only)
       settable.rs   - SettableParser<T> / SettableParserRef<T> for recursive grammars
-      lookahead.rs  - AndParser<T,P>, NotParser<T,P>
-      skip.rs       - SkipParser (open, content, close → content)
+      lookahead.rs  - AndParser<T>, NotParser<T>
+      skip.rs       - SkipParser<Aft, Bef, T> (open, content, close → content)
     action/
-      map.rs      - MapParser<T, P, F> (needs PhantomData<T>)
-      token.rs    - TokenParser<P>
+      map.rs      - MapParser<T, F> (delegate: Rc<dyn Parser<T>>, needs PhantomData<T>)
+      token.rs    - TokenParser<T>
       input.rs    - InputParser (flatten matched chars to String)
       only_if.rs  - OnlyIfParser (predicate gate on success value)
       flat_map.rs - FlatMapParser (monadic bind: value → next parser)
-      constant.rs - ConstantParser<T,P,V> (.constant(value) — replace matched value with a clone, V: Clone)
+      constant.rs - ConstantParser<T,V> (.constant(value) — replace matched value with a clone, V: Clone)
     repeater/
-      possessive.rs  - PossessiveRepeatingParser { min, max }
+      possessive.rs  - PossessiveRepeatingParser<T> { min, max }
       separated.rs   - SeparatedRepeatingParser (rep_sep/star_sep/plus_sep)
-      lazy.rs        - LazyRepeatingParser<P, T, PC, TC> { delegate, limit, min, max }
+      lazy.rs        - LazyRepeatingParser<T, TC> { delegate, limit, min, max }
     predicate.rs  - PredicateParser, string(&str), string_ignore_case(&str)
     regex.rs      - RegexParser, RegexMatch, regex(&str)
     ext.rs        - ParserExt<T> extension trait: map, flat_map, rep, times, star, plus, opt,
@@ -89,11 +89,86 @@ src/
 
 rust-petitparser-macros/src/
   lib.rs        - #[grammar] proc-macro attribute
+
+benches/
+  parse_grammars.rs - criterion parse/build benchmarks over the Dart + Smalltalk grammars
 ```
 
+## Storage model: `Rc<dyn Parser<T>>` everywhere + `HasChildren` (current design)
+The combinator core was redesigned (landed on `main`, commits `363633f`/`6d73303`; the abandoned
+alternative lives on branch `rc-everywhere`, see below). Two intertwined changes:
+
+**1. `Parser<T>` storage is `Rc<dyn Parser<T>>`, not a monomorphized generic.** Every combinator
+that holds a sub-parser stores it as `Rc<dyn Parser<T>>` (dynamic dispatch) rather than a bare
+generic `P: Parser<T>` (static dispatch). Consequences:
+- The trait gained two supertraits: `pub trait Parser<T: 'static>: Debug + HasChildren + 'static`.
+  The `'static` (on both `T` and `Self`) is what lets `ParserExt` methods do `Rc::new(self)` →
+  `Rc<dyn Parser<T>>` *without* restating `Self: 'static` on every method — satisfying `Parser<T>`
+  already implies it. `HasChildren` is the reflection hook (see below).
+- Combinator structs dropped their parser-type generic: `MapParser<T, P, F>` → `MapParser<T, F>`,
+  `ConstantParser<T, P, V>` → `ConstantParser<T, V>`, `LabeledParser<P, T>` → `LabeledParser<T>`,
+  `SkipParser<A, Aft, B, Bef, P, T>` → `SkipParser<Aft, Bef, T>`, `PossessiveRepeatingParser<P>` →
+  `<T>`, etc. The `Seq2-9` macro is generic over the value types (`Seq3<T1, T2, T3>`) and `Choice2-11`
+  over the single shared `T` (`Choice3<T>`); both got manual `Clone` impls (cheap `Rc::clone`,
+  bound-free) instead of `#[derive(Clone)]` (which would spuriously require `T: Clone`). `FlatMapParser`
+  keeps its `P2` generic — that parser is produced on the fly by the closure, not stored.
+  `ContinuationParser`/`SettableParser`/`expression/*` already stored `Rc<dyn Parser>` and were
+  unchanged. Leaf parsers (char/regex/predicate/position/success/epsilon/newline/eof/failure/
+  `CharacterRepeatingParser`) hold no delegate and were unchanged structurally.
+- `ParserExt` methods wrap `self` (and any passed-in delegate like `before`/`sep`/`limit`) in
+  `Rc::new(..)`. `impl Trait` arguments already imply `'static` via the `Parser` supertrait, so no
+  extra bounds were needed there.
+
+**The performance tradeoff (measured, deliberate).** Dynamic dispatch costs **~20% parse time on
+backtracking-heavy *recognizer* grammars** (Dart: 73→86 ms / 290→352 ms / 578→694 ms at 40/160/320
+units — scale-invariant, since the cost is one vtable hop + lost inlining *per `parse_on` call* and
+call count scales with input), and **~0% on AST-building grammars** (Smalltalk: statistically flat).
+Build (grammar construction) time is 2–3× (every layer heap-allocs an `Rc`) but in absolute µs,
+amortized over all parses → irrelevant. Chosen knowingly: the win is dramatically simpler code,
+smaller combinator types, faster compiles, and a near-free `HasChildren`. NOTE: the catastrophic
+exponential backtracking some grammars exhibit (e.g. the Dart grammar on real-world input) is an
+*orthogonal* no-memoization (non-packrat) property — `ref0`-style object sharing (our
+`SettableParser`/`#[grammar]`) avoids combinatorial explosion at graph *construction*, not at
+*evaluation*; the `Rc` change does not affect evaluation count at all. Bench harness:
+`benches/parse_grammars.rs` (run `cargo bench`; uses criterion, a dev-dependency).
+
+**2. `HasChildren` — required reflection supertrait (linter groundwork).**
+`pub trait HasChildren: Debug { fn children(&self) -> Vec<Rc<dyn HasChildren>>; }`, a *required*
+supertrait of `Parser<T>` (no opt-out, no default impl). It is deliberately **not** generic over
+the value type: a parser's children may each produce a different `T`, so a tree-walker needs one
+non-generic `dyn` handle to recurse through — this trait *cannot* be folded into `Parser<T>` and
+cannot be eliminated, only made mandatory (which is what gives universal linter support).
+- Combinator `children()` returns its stored delegate(s) `Rc<dyn Parser<Ti>>` upcast to
+  `Rc<dyn HasChildren>` — a one-liner, because of the `Rc` storage. The upcast is via **trait
+  upcasting** (stable Rust 1.86+, available on edition 2024); `vec![self.delegate.clone()]` coerces
+  without an explicit `as`, since the fn return type propagates as the expected element type making
+  the array literal a coercion site. Multi-delegate combinators list all (e.g. `SkipParser` →
+  before/delegate/after; repeaters → delegate + limit/separator). Leaf parsers return `vec![]`.
+- `SettableParser`/`SettableParserRef` return their current wrapped delegate; the `#[grammar]` macro
+  emits `children()` for the generated grammar struct (returns the start rule — a linter walks
+  transitively from there). Exported from the prelude.
+- **A real linter walk must dedupe by `Rc::as_ptr` identity** — recursive grammars are cyclic via
+  `SettableParserRef`, so naive recursion loops forever. `tests/has_children_tests.rs` only deep-walks
+  *acyclic* parsers for this reason.
+- **Custom `Parser` authors must impl `HasChildren`** (the one obligation the supertrait imposes).
+  The only hand-written custom parser in the examples, `TabularDefinition` (`tabular.rs`), has a
+  manual impl returning its four config sub-parsers — the template to follow.
+- The **linter rules themselves are NOT built yet** — this is only the `children()` reflection
+  foundation that unblocks them (dart's `linter_rules.dart`: unresolved-settable, nullable/unbounded
+  repeater, left-recursion, unreachable-choice-alternative, …).
+
+**Abandoned alternative (`rc-everywhere` branch, commit `e3f3aaf`).** The other way to get
+`HasChildren` was to keep monomorphized generic storage and widen ~390 call sites with
+`Clone + 'static` bounds (so `children()` could `Rc::new(self.delegate.clone())`). Zero runtime
+cost but pervasive bound noise. Benchmarked the `Rc` approach against it, chose `Rc` for the
+simpler code. Branch kept as the historical record / fallback; do not build on it.
+
 ## Key Design Decisions
-- `Parser<T>` is generic over `T` (not an associated type). This means impls where `T` only appears in the `where` clause (not the Self type or trait) require `PhantomData<T>` in the struct — see `MapParser`.
-- `ParserExt<T>: Parser<T> + Sized where T: Debug` extension trait provides method syntax. Blanket impl covers all parsers.
+- `Parser<T>` is generic over `T` (not an associated type), and carries supertraits:
+  `pub trait Parser<T: 'static>: Debug + HasChildren + 'static` (see "Storage model" above for the
+  `'static`/`HasChildren` rationale). Structs still carry `PhantomData<T>` where `T` would otherwise
+  only appear in a `where` clause — see `MapParser`.
+- `ParserExt<T>: Parser<T> + Sized where T: Debug + 'static` extension trait provides method syntax. Blanket impl covers all parsers.
 - `accept(input: &str)`/`accept_at(input: &str, start)` take `&str` and build the `Rc<[char]>` buffer
   internally, matching both dart's actual signature and this crate's own `Parser::parse(&str)`
   convenience wrapper — these are one-shot leaf calls, never invoked elsewhere in the codebase with a
@@ -103,7 +178,7 @@ rust-petitparser-macros/src/
   `&str` there would mean collecting that buffer into a `String` just to re-split it back into an
   `Rc<[char]>` inside `all_matches` — a wasteful, lossy round trip purely to satisfy the signature.
   Same combinator, two different call patterns, two different right answers.
-- Blanket `impl<T, P: Parser<T> + ?Sized> Parser<T> for Rc<P>` (in `core/parser.rs`) — lets `Rc<P>` and `Rc<dyn Parser<T>>` be used as parsers (delegates `parse_on`/`fast_parse_on`). Needed to share a sub-parser across multiple combinators via `Rc::new(..).clone()` (our parsers aren't generally `Clone`). `Rc<P>` is `Sized`, so it auto-gets `ParserExt` too.
+- Blanket `impl<T: 'static, P: Parser<T> + ?Sized> Parser<T> for Rc<P>` (in `core/parser.rs`) — lets `Rc<P>` and `Rc<dyn Parser<T>>` be used as parsers (delegates `parse_on`/`fast_parse_on`). Needed to share a sub-parser across multiple combinators via `Rc::new(..).clone()` (leaf parsers aren't generally `Clone`; combinators are now `Rc`-backed). `Rc<P>` is `Sized`, so it auto-gets `ParserExt` too. A parallel blanket `impl<P: HasChildren + ?Sized> HasChildren for Rc<P>` delegates `children()`.
 - `choice_impl!` macro uses `Option<Failure>` accumulation pattern (avoids needing to separate "first" from "rest").
 - `impl_seq!` macro uses `?` operator with sequential context threading.
 - `MatchesIterable` implements `IntoIterator` → `MatchesIterator`; supports `overlapping` flag.
@@ -145,7 +220,7 @@ call out as a gotcha** — a user defining a custom value type only discovers th
 they reach for one of these, so it's worth being upfront about it rather than letting people
 hit the compiler error cold):
 - `success(value: T)` — `SuccessParser<T: Clone + Debug>` (`src/parser/misc/success.rs`).
-- `.constant(value)` — `ConstantParser<T, P, V> where V: Clone + Debug`
+- `.constant(value)` — `ConstantParser<T, V> where V: Clone + Debug`
   (`src/parser/action/constant.rs`); note it's the *replacement* value type `V` that needs
   `Clone`, not the delegate's `T`.
 - `.opt_with(value)` / a from-scratch `OptionalParser<T, P>` (dart's `optionalWith` /
@@ -175,7 +250,8 @@ hit the compiler error cold):
 ## Testing
 - Uses `googletest` crate: `#[gtest]`, `assert_that!`, `eq`, `not`
 - Tests split across multiple files: `character_tests.rs`, `combinator_tests.rs`, `repeater_tests.rs`,
-  `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`
+  `action_tests.rs`, `matcher_tests.rs`, `misc_tests.rs`, `has_children_tests.rs` (the `HasChildren`
+  tree-walk tests — see "Storage model")
 - Each test file defines `assert_success!(parser, input, value, pos)` and `assert_failure!(parser, input, message, pos)`
   macros that check both `parse_on` and `fast_parse_on`
 - Example grammars: `tests/example-grammars/main.rs` (entry point) +
@@ -183,7 +259,7 @@ hit the compiler error cold):
   (written with the `#[grammar]` proc macro — each has genuinely recursive rules) + `tabular.rs` +
   `uri.rs` (hand-written — no recursion, so no macro/`SettableParser` needed) + `math.rs` (uses
   `ExpressionBuilder`, no `#[grammar]` needed since it has no recursive rules of its own)
-- 559 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
+- 573 tests passing — includes `bibtex::scg_bib_size_and_round_trip`, which makes a real network
   call (fetches ~9600-entry `scg.bib` from GitHub) on every `cargo test` run, by deliberate choice
   (~3s, judged worth it for the coverage; not `#[ignore]`d). Needs `ureq` (dev-dependency).
 
@@ -1098,11 +1174,13 @@ hit the compiler error cold):
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
   Deferred (needs new features, scope B/C):
-  reflection/introspection (`children`, `copy`, deep-equality — needed for dart's
-  `expectParserInvariants` assertions, and the only thing blocking porting dart's `math.dart`
-  example's `linter` test group, skipped for exactly this reason during that port — see
-  "Porting `dart-petitparser-examples`" above). Regex char parsers are no longer in this deferred
-  list — see "Ported dart's regex-backed `PatternParser`" above.
+  reflection/introspection — `children()` is now **done** (the `HasChildren` supertrait, see
+  "Storage model"), but `copy` (parser-graph copying), deep-equality, and the actual **linter
+  rules** are not. These are still what's needed for dart's `expectParserInvariants` assertions and
+  for porting dart's `math.dart` `linter` test group (skipped for exactly this reason during that
+  port — see "Porting `dart-petitparser-examples`" above). Next concrete step on this front: build
+  the linter rules on top of `children()`, with `Rc::as_ptr` dedup for the cyclic walk. Regex char
+  parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`" above.
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
