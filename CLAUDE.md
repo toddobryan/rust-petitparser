@@ -852,6 +852,12 @@ hit the compiler error cold):
     `RegexParser` directly with a custom message).
 
 ## What's Next
+
+**→ START HERE: port the linter.** The current head of work. Full actionable handoff (API to
+mirror, the 13 rule names, the parser-kind-identification gap to design first, and which rules are
+gated on deep-equality) is under the "THE IMMEDIATE NEXT STEP: port the linter" subsection in the
+test-parity bullet below. Everything else in this section is lower priority.
+
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
   are already covered by `tests/example-grammars/{json,expr}.rs`. Done so far: **tabular**
@@ -1174,14 +1180,37 @@ hit the compiler error cold):
   (extended `seq4_test` with all 4 failure positions, added `seq9_test` to confirm the pattern
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
-  Deferred (needs new features, scope B/C):
-  reflection/introspection — `children()` is now **done** (the `HasChildren` supertrait, see
-  "Storage model"), but `copy` (parser-graph copying), deep-equality, and the actual **linter
-  rules** are not. These are still what's needed for dart's `expectParserInvariants` assertions and
-  for porting dart's `math.dart` `linter` test group (skipped for exactly this reason during that
-  port — see "Porting `dart-petitparser-examples`" above). Next concrete step on this front: build
-  the linter rules on top of `children()`, with `Rc::as_ptr` dedup for the cyclic walk. Regex char
-  parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`" above.
+
+  ### >>> THE IMMEDIATE NEXT STEP: port the linter <<<
+  The `children()` reflection foundation is done (`HasChildren`, see "Storage model"); the next
+  feature is the **linter** itself — port dart's `lib/src/reflection/linter.dart` +
+  `lib/src/reflection/internal/linter_rules.dart` (in the pinned `v7.0.2` checkout). This unblocks
+  the one skipped example-grammar test group (`math.dart`'s `linter` group, see "Porting
+  `dart-petitparser-examples`"). Concretely:
+  - **API to mirror:** `linter(parser) -> Vec<LinterIssue>`; `LinterRule { type, title }` (type =
+    severity: info/warning/error); each `LinterIssue` carries the offending parser + a message.
+    Drive it by walking the parser graph via `children()`, **deduping by `Rc::as_ptr` identity**
+    (recursive grammars are cyclic — see the `tests/has_children_tests.rs` note).
+  - **The 13 rules** (dart class names): `CharacterRepeater`, `DuplicateParser`, `LeftRecursion`,
+    `NestedChoice`, `NullableRepeater`, `OverlappingChoice`, `RepeatedChoice`, `UnnecessaryFlatten`,
+    `UnnecessaryResolvable`, `UnoptimizedFlatten`, `UnreachableChoice`, `UnresolvedSettable`,
+    `UnusedResult`.
+  - **The real gap (design this first):** dart's rules pattern-match on parser *kind*
+    (`parser is ChoiceParser`, `is RepeatingParser`, `is SettableParser`, …). `HasChildren` exposes
+    only children, NOT "what kind am I." So the linter needs a parser-kind-identification mechanism
+    first — either `Any`+`downcast_ref` (add an `as_any(&self)` to a trait), or a `kind()` tag
+    method, or per-rule trait probes. Decide this before writing rules.
+  - **Per-rule prerequisites beyond `children()`+kind:** `DuplicateParser`/`RepeatedChoice`/
+    `OverlappingChoice` need structural **deep-equality** of sub-parsers; `UnnecessaryResolvable`
+    needs settable-identity reasoning. So deep-equality (and possibly dart's `copy`, graph copying)
+    are still genuinely deferred and gate those specific rules — the kind-only rules
+    (`NullableRepeater`, `LeftRecursion`, `NestedChoice`, `UnresolvedSettable`, etc.) can land first
+    without them.
+
+  Other deferred reflection bits: `copy` (parser-graph copying) and deep-equality — needed for
+  dart's `expectParserInvariants` assertions and the equality-dependent linter rules above. Regex
+  char parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`"
+  above.
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`
