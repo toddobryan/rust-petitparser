@@ -95,8 +95,8 @@ benches/
 ```
 
 ## Storage model: `Rc<dyn Parser<T>>` everywhere + `HasChildren` (current design)
-The combinator core was redesigned (landed on `main`, commits `363633f`/`6d73303`; the abandoned
-alternative lives on branch `rc-everywhere`, see below). Two intertwined changes:
+The combinator core was redesigned (landed on `main`, commits `363633f`/`6d73303`; an abandoned
+alternative was evaluated and discarded, see below). Two intertwined changes:
 
 **1. `Parser<T>` storage is `Rc<dyn Parser<T>>`, not a monomorphized generic.** Every combinator
 that holds a sub-parser stores it as `Rc<dyn Parser<T>>` (dynamic dispatch) rather than a bare
@@ -157,11 +157,12 @@ cannot be eliminated, only made mandatory (which is what gives universal linter 
   foundation that unblocks them (dart's `linter_rules.dart`: unresolved-settable, nullable/unbounded
   repeater, left-recursion, unreachable-choice-alternative, …).
 
-**Abandoned alternative (`rc-everywhere` branch, commit `e3f3aaf`).** The other way to get
-`HasChildren` was to keep monomorphized generic storage and widen ~390 call sites with
+**Abandoned alternative (was branch `rc-everywhere`, commit `e3f3aaf`, since deleted).** The other
+way to get `HasChildren` was to keep monomorphized generic storage and widen ~390 call sites with
 `Clone + 'static` bounds (so `children()` could `Rc::new(self.delegate.clone())`). Zero runtime
 cost but pervasive bound noise. Benchmarked the `Rc` approach against it, chose `Rc` for the
-simpler code. Branch kept as the historical record / fallback; do not build on it.
+simpler code, and deleted both the `rc-everywhere` and `rc-storage` work branches once `rc-storage`
+landed on `main` — this paragraph is the only remaining record of the alternative.
 
 ## Key Design Decisions
 - `Parser<T>` is generic over `T` (not an associated type), and carries supertraits:
