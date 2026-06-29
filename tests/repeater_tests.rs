@@ -51,7 +51,8 @@ fn star_with_opt_that_doesnt_consume_should_panic() {
 
     panic::set_hook(Box::new(|_| {}));
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("y"))).expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("y")))
+        .expect_err("the function did not panic");
 
     panic::set_hook(orig);
 
@@ -600,14 +601,17 @@ fn star_lazy_with_non_consuming_delegate_should_panic() {
     let orig = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse(""))).expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("")))
+        .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("Delegate parser EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.fast_parse_on(&Context::new("", 0))))
-        .expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        p.fast_parse_on(&Context::new("", 0))
+    }))
+    .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
@@ -622,14 +626,17 @@ fn plus_lazy_with_non_consuming_delegate_should_panic() {
     let orig = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse(""))).expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("")))
+        .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.fast_parse_on(&Context::new("", 0))))
-        .expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        p.fast_parse_on(&Context::new("", 0))
+    }))
+    .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
@@ -755,14 +762,17 @@ fn star_greedy_with_non_consuming_delegate_should_panic() {
     let orig = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse(""))).expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("")))
+        .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.fast_parse_on(&Context::new("", 0))))
-        .expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        p.fast_parse_on(&Context::new("", 0))
+    }))
+    .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
@@ -777,14 +787,17 @@ fn plus_greedy_with_non_consuming_delegate_should_panic() {
     let orig = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse(""))).expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.parse("")))
+        .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")
     );
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| p.fast_parse_on(&Context::new("", 0))))
-        .expect_err("the function did not panic");
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        p.fast_parse_on(&Context::new("", 0))
+    }))
+    .expect_err("the function did not panic");
     assert_that!(
         panic_message(result.as_ref()),
         eq("EpsilonParser { result: () } must always consume")

@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use crate::core::result::Success;
 use std::fmt::Debug;
@@ -17,6 +17,15 @@ macro_rules! impl_seq {
         impl <$($value),+> Clone for $name<$($value),+> {
             fn clone(&self) -> Self {
                 $name { $($field: self.$field.clone(),)+ }
+            }
+        }
+
+        impl <$($value),+> HasChildren for $name<$($value),+>
+        where
+            $($value: Debug + 'static,)+
+        {
+            fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+                vec![$(self.$field.clone()),+]
             }
         }
 

@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -13,6 +13,12 @@ pub struct FlatMapParser<P2, T, T2> {
     pub f: fn(&T) -> P2,
     pub delegate_type: PhantomData<T>,
     pub result_type: PhantomData<T2>,
+}
+
+impl<P2: Debug, T: Debug + 'static, T2: Debug> HasChildren for FlatMapParser<P2, T, T2> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<P2, T, T2> Parser<T2> for FlatMapParser<P2, T, T2>

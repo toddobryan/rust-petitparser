@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -31,6 +31,12 @@ where
                     .unwrap_or(format!("unexpected \"{:?}\"", result.value)),
             }),
         }
+    }
+}
+
+impl<T: Debug + 'static> HasChildren for OnlyIfParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
     }
 }
 

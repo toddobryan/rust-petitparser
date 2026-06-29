@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -10,6 +10,12 @@ pub struct InputParser<T: Debug> {
     pub delegate: Rc<dyn Parser<T>>,
     pub message: Option<String>,
     pub delegate_type: PhantomData<T>,
+}
+
+impl<T: Debug + 'static> HasChildren for InputParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<T: Debug + 'static> Parser<String> for InputParser<T> {

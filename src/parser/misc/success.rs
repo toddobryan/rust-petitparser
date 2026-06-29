@@ -1,11 +1,18 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct SuccessParser<T: Clone + Debug> {
     result: T,
+}
+
+impl<T: Clone + Debug> HasChildren for SuccessParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
+    }
 }
 
 impl<T> Parser<T> for SuccessParser<T>

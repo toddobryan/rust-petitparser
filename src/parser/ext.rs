@@ -163,7 +163,11 @@ where
         self.rep(0, None)
     }
 
-    fn star_sep<S: Debug + 'static>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+    fn star_sep<S: Debug + 'static>(
+        self,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<Vec<T>> {
         self.rep_sep(sep, 0, None, trailing)
     }
 
@@ -200,7 +204,11 @@ where
         self.rep(1, None)
     }
 
-    fn plus_sep<S: Debug + 'static>(self, sep: impl Parser<S>, trailing: Trailing) -> impl Parser<Vec<T>> {
+    fn plus_sep<S: Debug + 'static>(
+        self,
+        sep: impl Parser<S>,
+        trailing: Trailing,
+    ) -> impl Parser<Vec<T>> {
         self.rep_sep(sep, 1, None, trailing)
     }
 

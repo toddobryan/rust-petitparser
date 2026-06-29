@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::Context,
-    parser::Parser,
+    parser::{HasChildren, Parser},
     result::{ParseResult, Success},
 };
 
@@ -14,6 +14,12 @@ pub struct ElementsAtParser<I, T> {
     pub indexes: Vec<i32>,
     pub iterator_type: PhantomData<I>,
     pub delegate_type: PhantomData<T>,
+}
+
+impl<I: Debug + 'static, T: Debug> HasChildren for ElementsAtParser<I, T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<I, T> Parser<Vec<T>> for ElementsAtParser<I, T>

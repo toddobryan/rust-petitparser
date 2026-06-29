@@ -2,9 +2,10 @@ use regex::{Captures, Match, Regex};
 
 use crate::core::{
     context::{Context, HasContext},
-    parser::Parser,
+    parser::{HasChildren, Parser},
     result::{Failure, ParseResult, Success},
 };
+use std::rc::Rc;
 
 pub fn regex(pattern: &str) -> RegexParser {
     let regex = Regex::new(pattern).unwrap();
@@ -36,6 +37,12 @@ impl RegexParser {
             .nth(context.position)
             .map(|(b, _)| b)
             .unwrap_or(context.text.len())
+    }
+}
+
+impl HasChildren for RegexParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
     }
 }
 

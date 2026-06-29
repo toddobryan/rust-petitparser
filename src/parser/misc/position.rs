@@ -1,9 +1,16 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct PositionParser;
+
+impl HasChildren for PositionParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
+    }
+}
 
 impl Parser<usize> for PositionParser {
     fn parse_on(&self, context: &Context) -> ParseResult<usize> {

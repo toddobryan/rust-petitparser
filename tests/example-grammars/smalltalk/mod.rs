@@ -624,7 +624,11 @@ mod tests {
     use googletest::prelude::*;
     use std::fmt::Debug;
 
-    fn verify<T: Debug + PartialEq + 'static>(production: impl Parser<T>, source: &str, expected: T) {
+    fn verify<T: Debug + PartialEq + 'static>(
+        production: impl Parser<T>,
+        source: &str,
+        expected: T,
+    ) {
         let result = production.end().parse(source);
         let success =
             result.unwrap_or_else(|e| panic!("expected success for {source:?}, got {e:?}"));

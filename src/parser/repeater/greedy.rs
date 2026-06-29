@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::{Context, HasContext},
-    parser::Parser,
+    parser::{HasChildren, Parser},
     result::ParseResult,
 };
 
@@ -15,6 +15,12 @@ pub struct GreedyRepeatingParser<T> {
     pub min: usize,
     pub max: Option<usize>,
     pub delegate_type: PhantomData<T>,
+}
+
+impl<T: Debug + 'static> HasChildren for GreedyRepeatingParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone(), self.limit.clone()]
+    }
 }
 
 impl<T> Parser<Vec<T>> for GreedyRepeatingParser<T>

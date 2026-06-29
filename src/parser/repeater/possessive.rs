@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -9,6 +9,12 @@ pub struct PossessiveRepeatingParser<T> {
     pub delegate: Rc<dyn Parser<T>>,
     pub min: usize,
     pub max: Option<usize>,
+}
+
+impl<T: Debug + 'static> HasChildren for PossessiveRepeatingParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<T> Parser<Vec<T>> for PossessiveRepeatingParser<T>

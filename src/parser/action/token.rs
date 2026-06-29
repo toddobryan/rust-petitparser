@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use crate::core::token::Token;
 use std::fmt::Debug;
@@ -8,6 +8,12 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 pub struct TokenParser<T> {
     pub parser: Rc<dyn Parser<T>>,
+}
+
+impl<T: Debug + 'static> HasChildren for TokenParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.parser.clone()]
+    }
 }
 
 impl<T> Parser<Token<T>> for TokenParser<T>

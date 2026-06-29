@@ -1,10 +1,17 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct NewlineParser {
     pub message: Option<String>,
+}
+
+impl HasChildren for NewlineParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
+    }
 }
 
 impl Parser<String> for NewlineParser {

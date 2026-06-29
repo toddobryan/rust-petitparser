@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::{Context, HasContext},
-    parser::Parser,
+    parser::{HasChildren, Parser},
     result::ParseResult,
 };
 
@@ -38,6 +38,12 @@ impl Debug for CharacterRepeatingParser {
             .field("min", &self.min)
             .field("max", &self.max)
             .finish()
+    }
+}
+
+impl HasChildren for CharacterRepeatingParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
     }
 }
 

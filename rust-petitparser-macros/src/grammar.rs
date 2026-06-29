@@ -119,6 +119,14 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
             #(#public_parsers)*
         }
 
+        // The grammar's immediate child is its start rule; a linter walks transitively from
+        // there through every rule reachable via `SettableParserRef`.
+        impl HasChildren for #struct_name {
+            fn children(&self) -> Vec<std::rc::Rc<dyn HasChildren>> {
+                vec![std::rc::Rc::new(self.start.clone())]
+            }
+        }
+
         impl Parser<#start_type> for #struct_name {
             fn parse_on(&self, context: &Context) -> ParseResult<#start_type> {
                 self.start.parse_on(context)

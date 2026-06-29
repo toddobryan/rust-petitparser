@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -13,6 +13,18 @@ pub struct SkipParser<Aft, Bef, T> {
     pub delegate_type: PhantomData<T>,
     pub before_type: PhantomData<Bef>,
     pub after_type: PhantomData<Aft>,
+}
+
+impl<Aft: Debug + 'static, Bef: Debug + 'static, T: Debug + 'static> HasChildren
+    for SkipParser<Aft, Bef, T>
+{
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![
+            self.before.clone(),
+            self.delegate.clone(),
+            self.after.clone(),
+        ]
+    }
 }
 
 impl<Aft, Bef, T> Parser<T> for SkipParser<Aft, Bef, T>

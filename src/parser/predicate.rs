@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult};
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -55,6 +55,12 @@ impl PredicateParser {
             predicate: self.predicate.clone(),
             message,
         }
+    }
+}
+
+impl HasChildren for PredicateParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
     }
 }
 

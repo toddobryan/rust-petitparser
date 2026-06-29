@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
@@ -30,6 +30,12 @@ impl<T> Clone for UndefinedParser<T> {
             message: self.message.clone(),
             result_type: PhantomData,
         }
+    }
+}
+
+impl<T> HasChildren for UndefinedParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
     }
 }
 
@@ -82,6 +88,12 @@ impl<T> Clone for SettableParser<T> {
     }
 }
 
+impl<T: 'static> HasChildren for SettableParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.borrow().clone()]
+    }
+}
+
 impl<T: 'static> Parser<T> for SettableParser<T> {
     fn parse_on(&self, context: &Context) -> ParseResult<T> {
         self.delegate.borrow().parse_on(context)
@@ -110,6 +122,18 @@ impl<T> Clone for SettableParserRef<T> {
         SettableParserRef {
             delegate: self.delegate.clone(),
         }
+    }
+}
+
+impl<T: 'static> HasChildren for SettableParserRef<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![
+            self.delegate
+                .upgrade()
+                .expect("SettableParser owner dropped")
+                .borrow()
+                .clone(),
+        ]
     }
 }
 

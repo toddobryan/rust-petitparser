@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::prelude::HasContext;
 use std::fmt::Debug;
@@ -10,6 +10,12 @@ use std::rc::Rc;
 pub struct AndParser<T> {
     pub delegate: Rc<dyn Parser<T>>,
     pub delegate_type: PhantomData<T>,
+}
+
+impl<T: Debug + 'static> HasChildren for AndParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<T> Parser<T> for AndParser<T>
@@ -33,6 +39,12 @@ pub struct NotParser<T> {
     pub delegate: Rc<dyn Parser<T>>,
     pub delegate_type: PhantomData<T>,
     pub message: String,
+}
+
+impl<T: Debug + 'static> HasChildren for NotParser<T> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
+    }
 }
 
 impl<T> Parser<Failure> for NotParser<T>

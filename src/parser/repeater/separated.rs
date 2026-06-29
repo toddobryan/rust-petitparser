@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -116,6 +116,14 @@ pub struct SeparatedListRepeatingParser<T, Sep> {
     pub trailing: Trailing,
     pub delegate_type: PhantomData<T>,
     pub separator_type: PhantomData<Sep>,
+}
+
+impl<T: Debug + 'static, Sep: Debug + 'static> HasChildren
+    for SeparatedListRepeatingParser<T, Sep>
+{
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone(), self.separator.clone()]
+    }
 }
 
 impl<T, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<T, Sep>

@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use crate::parser::repeater::character::CharacterRepeatingParser;
 use std::fmt::Debug;
@@ -175,6 +175,12 @@ impl CharParser {
     }
 }
 
+impl HasChildren for CharParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
+    }
+}
+
 impl Parser<char> for CharParser {
     fn parse_on(&self, context: &Context) -> ParseResult<char> {
         let pos = context.position();
@@ -238,6 +244,12 @@ impl Debug for PredicateCharParser {
             .field("description", &self.description)
             .field("message", &self.message)
             .finish()
+    }
+}
+
+impl HasChildren for PredicateCharParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
     }
 }
 

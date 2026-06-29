@@ -1,6 +1,7 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
+use std::rc::Rc;
 
 pub fn eof() -> EndOfInputParser {
     EndOfInputParser {
@@ -15,6 +16,12 @@ pub fn eof_with_message(message: String) -> EndOfInputParser {
 #[derive(Clone, Debug)]
 pub struct EndOfInputParser {
     pub message: String,
+}
+
+impl HasChildren for EndOfInputParser {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![]
+    }
 }
 
 impl Parser<()> for EndOfInputParser {

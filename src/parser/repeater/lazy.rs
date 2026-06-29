@@ -1,5 +1,5 @@
 use crate::core::context::{Context, HasContext};
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -13,6 +13,12 @@ pub struct LazyRepeatingParser<T, TC> {
     pub max: Option<usize>,
     pub delegate_type: PhantomData<T>,
     pub limit_type: PhantomData<TC>,
+}
+
+impl<T: Debug + 'static, TC: Debug + 'static> HasChildren for LazyRepeatingParser<T, TC> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone(), self.limit.clone()]
+    }
 }
 
 impl<T, TC> Parser<Vec<T>> for LazyRepeatingParser<T, TC>

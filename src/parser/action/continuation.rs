@@ -1,3 +1,4 @@
+use crate::core::parser::HasChildren;
 use crate::prelude::{Context, ParseResult, Parser};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -35,6 +36,12 @@ impl<T, T2, H> Debug for ContinuationParser<T, T2, H> {
             .field("delegate", &self.delegate)
             .field("handler", &format_args!("<function>"))
             .finish_non_exhaustive()
+    }
+}
+
+impl<T: 'static, T2, H> HasChildren for ContinuationParser<T, T2, H> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
     }
 }
 

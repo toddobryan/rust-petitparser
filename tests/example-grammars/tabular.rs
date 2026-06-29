@@ -11,6 +11,17 @@ pub struct TabularDefinition {
     newline: Rc<dyn Parser<String>>,
 }
 
+impl HasChildren for TabularDefinition {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![
+            self.quote.clone(),
+            self.escape.clone(),
+            self.delimiter.clone(),
+            self.newline.clone(),
+        ]
+    }
+}
+
 impl Parser<Vec<Vec<String>>> for TabularDefinition {
     fn parse_on(&self, context: &Context) -> ParseResult<Vec<Vec<String>>> {
         self.start().parse_on(context)

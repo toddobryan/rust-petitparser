@@ -1,5 +1,5 @@
 use crate::core::context::Context;
-use crate::core::parser::Parser;
+use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
@@ -19,6 +19,12 @@ impl<T: 'static, F> Debug for MapParser<T, F> {
             .field("f", &"<mapping function>")
             .field("from_type", &self.from_type)
             .finish()
+    }
+}
+
+impl<T: 'static, F> HasChildren for MapParser<T, F> {
+    fn children(&self) -> Vec<Rc<dyn HasChildren>> {
+        vec![self.delegate.clone()]
     }
 }
 
