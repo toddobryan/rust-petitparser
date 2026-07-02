@@ -198,7 +198,7 @@ fn verify_with(input: &str, expected: f64, variables: &HashMap<String, f64>) {
         expected,
         actual
     );
-    assert_that!(result.value.to_string().is_empty(), eq(false));
+    assert_that!(result.value.to_string().is_empty(), is_false());
 }
 
 fn verify(input: &str, expected: f64) {

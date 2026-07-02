@@ -41,12 +41,12 @@ fn resume() {
     let conts = continuations.borrow();
     let ctxs = contexts.borrow();
 
-    assert_that!(conts[0].resume(&ctxs[0]).is_ok(), eq(true));
-    assert_that!(conts[1].resume(&ctxs[1]).is_ok(), eq(false));
+    assert_that!(conts[0].resume(&ctxs[0]).is_ok(), is_true());
+    assert_that!(conts[1].resume(&ctxs[1]).is_ok(), is_false());
 
     // of course the continuations can be resumed multiple times
-    assert_that!(conts[0].resume(&ctxs[0]).is_ok(), eq(true));
-    assert_that!(conts[1].resume(&ctxs[1]).is_ok(), eq(false));
+    assert_that!(conts[0].resume(&ctxs[0]).is_ok(), is_true());
+    assert_that!(conts[1].resume(&ctxs[1]).is_ok(), is_false());
 }
 
 #[gtest]

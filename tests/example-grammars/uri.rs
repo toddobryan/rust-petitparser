@@ -377,6 +377,6 @@ fn uri_regex_smoke_test() {
     ];
     for input in inputs {
         let result = p.parse(input);
-        assert_that!(result.is_ok(), eq(true), "failed to parse: {input}");
+        assert_that!(result.is_ok(), is_true(), "failed to parse: {input}");
     }
 }
