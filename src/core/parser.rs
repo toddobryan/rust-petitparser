@@ -29,6 +29,82 @@ pub trait Parser<T: 'static>: Debug + HasChildren + 'static {
 /// impls one-liners under the `Rc`-storage design.
 pub trait HasChildren: Debug {
     fn children(&self) -> Vec<Rc<dyn HasChildren>>;
+
+    fn is_directly_nullable(&self) -> bool {
+        false
+    }
+
+    fn is_sequence(&self) -> bool {
+        false
+    }
+
+    fn is_choice(&self) -> bool {
+        false
+    }
+
+    fn is_repeating(&self) -> bool {
+        false
+    } // possessive/lazy/greedy only
+
+    fn is_separated_repeating(&self) -> bool {
+        false
+    }
+
+    fn is_possessive_repeating(&self) -> bool {
+        false
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        None
+    }
+
+    fn is_settable(&self) -> bool {
+        false
+    }
+
+    fn is_undefined(&self) -> bool {
+        false
+    } // UndefinedParser sentinel
+
+    fn is_char(&self) -> bool {
+        false
+    } // CharParser or PredicateCharParser
+
+    fn is_string_predicate(&self) -> bool {
+        false
+    } // PredicateParser (string)
+
+    fn is_input(&self) -> bool {
+        false
+    } // InputParser
+
+    fn input_message(&self) -> Option<&str> {
+        None
+    } // InputParser's message field
+
+    fn is_newline(&self) -> bool {
+        false
+    }
+
+    fn is_char_repeating(&self) -> bool {
+        false
+    } // CharacterRepeatingParser
+
+    fn is_map_parser(&self) -> bool {
+        false
+    }
+
+    fn is_constant_parser(&self) -> bool {
+        false
+    }
+
+    fn is_token_parser(&self) -> bool {
+        false
+    }
+
+    fn is_only_if(&self) -> bool {
+        false
+    }
 }
 
 impl<T: 'static, P: Parser<T> + ?Sized> Parser<T> for Rc<P> {
@@ -44,5 +120,81 @@ impl<T: 'static, P: Parser<T> + ?Sized> Parser<T> for Rc<P> {
 impl<P: HasChildren + ?Sized> HasChildren for Rc<P> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         (**self).children()
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        (**self).is_directly_nullable()
+    }
+
+    fn is_sequence(&self) -> bool {
+        (**self).is_sequence()
+    }
+
+    fn is_choice(&self) -> bool {
+        (**self).is_choice()
+    }
+
+    fn is_repeating(&self) -> bool {
+        (**self).is_repeating()
+    }
+
+    fn is_separated_repeating(&self) -> bool {
+        (**self).is_separated_repeating()
+    }
+
+    fn is_possessive_repeating(&self) -> bool {
+        (**self).is_possessive_repeating()
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        (**self).repeating_min()
+    }
+
+    fn is_settable(&self) -> bool {
+        (**self).is_settable()
+    }
+
+    fn is_undefined(&self) -> bool {
+        (**self).is_undefined()
+    }
+
+    fn is_char(&self) -> bool {
+        (**self).is_char()
+    }
+
+    fn is_string_predicate(&self) -> bool {
+        (**self).is_string_predicate()
+    }
+
+    fn is_input(&self) -> bool {
+        (**self).is_input()
+    }
+
+    fn input_message(&self) -> Option<&str> {
+        (**self).input_message()
+    }
+
+    fn is_newline(&self) -> bool {
+        (**self).is_newline()
+    }
+
+    fn is_char_repeating(&self) -> bool {
+        (**self).is_char_repeating()
+    }
+
+    fn is_map_parser(&self) -> bool {
+        (**self).is_map_parser()
+    }
+
+    fn is_constant_parser(&self) -> bool {
+        (**self).is_constant_parser()
+    }
+
+    fn is_token_parser(&self) -> bool {
+        (**self).is_token_parser()
+    }
+
+    fn is_only_if(&self) -> bool {
+        (**self).is_only_if()
     }
 }

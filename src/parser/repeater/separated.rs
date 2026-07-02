@@ -124,6 +124,22 @@ impl<T: Debug + 'static, Sep: Debug + 'static> HasChildren
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.separator.clone()]
     }
+
+    fn is_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_separated_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        self.min == 0
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        Some(self.min)
+    }
 }
 
 impl<T, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<T, Sep>

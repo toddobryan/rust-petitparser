@@ -37,6 +37,10 @@ impl<T> HasChildren for UndefinedParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_undefined(&self) -> bool {
+        true
+    }
 }
 
 impl<T: 'static> Parser<T> for UndefinedParser<T> {
@@ -51,7 +55,7 @@ pub struct SettableParser<T> {
 
 impl<T> Debug for SettableParser<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Settable - add Debug eventually")
+        f.write_str(&format!("{:?}", self.delegate))
     }
 }
 
@@ -92,6 +96,14 @@ impl<T: 'static> HasChildren for SettableParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.borrow().clone()]
     }
+
+    fn is_settable(&self) -> bool {
+        true
+    }
+
+    fn is_undefined(&self) -> bool {
+        self.delegate.borrow().is_undefined()
+    }
 }
 
 impl<T: 'static> Parser<T> for SettableParser<T> {
@@ -113,7 +125,10 @@ pub struct SettableParserRef<T> {
 
 impl<T> Debug for SettableParserRef<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("SettableRef - add Debug eventually")
+        match self.delegate.upgrade() {
+            Some(_) => f.write_str("SettableParserRef(<-)"),
+            None => f.write_str("SettableParserRef(dropped)"),
+        }
     }
 }
 

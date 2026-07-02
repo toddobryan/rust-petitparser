@@ -26,6 +26,10 @@ impl<T: 'static, F> HasChildren for MapParser<T, F> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
     }
+
+    fn is_map_parser(&self) -> bool {
+        true
+    }
 }
 
 impl<T, U, F> Parser<U> for MapParser<T, F>

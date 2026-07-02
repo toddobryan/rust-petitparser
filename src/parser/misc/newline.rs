@@ -12,6 +12,10 @@ impl HasChildren for NewlineParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_newline(&self) -> bool {
+        true
+    }
 }
 
 impl Parser<String> for NewlineParser {

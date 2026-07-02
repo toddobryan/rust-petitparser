@@ -10,6 +10,10 @@ impl HasChildren for PositionParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_directly_nullable(&self) -> bool {
+        true
+    }
 }
 
 impl Parser<usize> for PositionParser {

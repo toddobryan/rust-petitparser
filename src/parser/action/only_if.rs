@@ -38,6 +38,10 @@ impl<T: Debug + 'static> HasChildren for OnlyIfParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
     }
+
+    fn is_only_if(&self) -> bool {
+        true
+    }
 }
 
 impl<T> Parser<T> for OnlyIfParser<T>

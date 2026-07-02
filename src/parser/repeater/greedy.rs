@@ -21,6 +21,18 @@ impl<T: Debug + 'static> HasChildren for GreedyRepeatingParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.limit.clone()]
     }
+
+    fn is_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        self.min == 0
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        Some(self.min)
+    }
 }
 
 impl<T> Parser<Vec<T>> for GreedyRepeatingParser<T>

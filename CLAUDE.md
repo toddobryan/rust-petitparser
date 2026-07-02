@@ -1181,36 +1181,148 @@ test-parity bullet below. Everything else in this section is lower priority.
   holds at the macro-generated max arity too) (`combinator_tests.rs`).
   **Scope A is now fully ported** — nothing left in the "remaining portable-now" bucket.
 
-  ### >>> THE IMMEDIATE NEXT STEP: port the linter <<<
-  The `children()` reflection foundation is done (`HasChildren`, see "Storage model"); the next
-  feature is the **linter** itself — port dart's `lib/src/reflection/linter.dart` +
-  `lib/src/reflection/internal/linter_rules.dart` (in the pinned `v7.0.2` checkout). This unblocks
-  the one skipped example-grammar test group (`math.dart`'s `linter` group, see "Porting
-  `dart-petitparser-examples`"). Concretely:
-  - **API to mirror:** `linter(parser) -> Vec<LinterIssue>`; `LinterRule { type, title }` (type =
-    severity: info/warning/error); each `LinterIssue` carries the offending parser + a message.
-    Drive it by walking the parser graph via `children()`, **deduping by `Rc::as_ptr` identity**
-    (recursive grammars are cyclic — see the `tests/has_children_tests.rs` note).
-  - **The 13 rules** (dart class names): `CharacterRepeater`, `DuplicateParser`, `LeftRecursion`,
-    `NestedChoice`, `NullableRepeater`, `OverlappingChoice`, `RepeatedChoice`, `UnnecessaryFlatten`,
-    `UnnecessaryResolvable`, `UnoptimizedFlatten`, `UnreachableChoice`, `UnresolvedSettable`,
-    `UnusedResult`.
-  - **The real gap (design this first):** dart's rules pattern-match on parser *kind*
-    (`parser is ChoiceParser`, `is RepeatingParser`, `is SettableParser`, …). `HasChildren` exposes
-    only children, NOT "what kind am I." So the linter needs a parser-kind-identification mechanism
-    first — either `Any`+`downcast_ref` (add an `as_any(&self)` to a trait), or a `kind()` tag
-    method, or per-rule trait probes. Decide this before writing rules.
-  - **Per-rule prerequisites beyond `children()`+kind:** `DuplicateParser`/`RepeatedChoice`/
-    `OverlappingChoice` need structural **deep-equality** of sub-parsers; `UnnecessaryResolvable`
-    needs settable-identity reasoning. So deep-equality (and possibly dart's `copy`, graph copying)
-    are still genuinely deferred and gate those specific rules — the kind-only rules
-    (`NullableRepeater`, `LeftRecursion`, `NestedChoice`, `UnresolvedSettable`, etc.) can land first
-    without them.
+  ### >>> THE IMMEDIATE NEXT STEP: finish the linter <<<
+  The linter infrastructure is now fully landed. **Done so far:**
+  - `src/reflection/analyzer.rs` — `Analyzer` struct with DFS graph walk (`parsers` Vec), fixed-
+    point first-set computation, and cycle-set computation. Public API: `new(root)`, `parsers`,
+    `is_nullable(&p)`, `first_set(&p)`, `cycle_set(&p)`. `PtrKey = *const ()` for Rc identity.
+    Sentinel pattern: a private `Rc<dyn HasChildren>` wrapping `EpsilonParser<()>` is seeded into
+    first_sets as the nullable marker; NOT in `parsers`, but IS in `by_ptr`.
+  - `src/reflection/linter.rs` — `LinterType` (Info/Warning/Error), `LinterIssue`, `LinterRule`
+    trait, `linter(root, rules) -> Vec<LinterIssue>` walker.
+  - `src/reflection/linter_rules.rs` — `NullableRepeater` and `UnresolvedSettable` rules;
+    `ALL_LINTER_RULES` constant. Exported from `prelude.rs`.
+  - `tests/linter_tests.rs` — 41 tests covering graph traversal, is_nullable, first_set,
+    cycle_set, UnresolvedSettable, NullableRepeater, and ALL_LINTER_RULES smoke tests. All pass.
+  - **Key bugs fixed during this work:**
+    - `compute_first_sets` seeding: built `p_first_set` but forgot `first_sets.insert(ptr(&p),
+      p_first_set)` — silently discarded every seeded first_set before the fix.
+    - **Blanket `impl HasChildren for Rc<P>` only delegated `children()`** — all kind-query
+      methods (`is_directly_nullable`, `is_sequence`, `is_choice`, `is_repeating`,
+      `is_separated_repeating`, `is_settable`, `is_undefined`, etc.) fell through to the trait
+      default returning `false`. Root cause: when `p: Rc<dyn HasChildren>` and you call
+      `p.is_directly_nullable()`, Rust uses the static blanket impl (which doesn't override it)
+      rather than the vtable. Fix: add `(**self).method()` delegation for every method in the
+      blanket impl (`src/core/parser.rs`). This was the root cause of ALL is_nullable/linter-rule
+      failures — once fixed, 39 of 41 tests passed immediately.
+    - `SettableParser::is_undefined()` previously called `self.delegate.borrow().is_undefined()`
+      on `Rc<dyn Parser<T>>` — same blanket-impl problem. Now fixed transitively by the blanket
+      impl fix above (the borrow gives `Ref<Rc<dyn Parser<T>>>`, and calling `is_undefined()` on
+      `Rc<dyn Parser<T>>` now correctly delegates through to the underlying type).
+    - `cycle_set()` public method was missing. Added.
+  - **Structural deduplication gotcha (documented in tests):** `seq2(a.clone(), a.clone())` where
+    `a: Rc<dyn Parser<T>>` does NOT deduplicate. `seq2`/`choice2` wrap each argument in
+    `Rc::new(arg)`, creating a new outer allocation for each. Two clones of `a` → two distinct
+    outer Rcs with different ptrs → DFS sees 3 nodes (seq2 + 2 wrappers), not 2. True structural
+    sharing only works with `SettableParser`/`.borrow()` weak refs (no wrapping in `Rc::new`).
+  - **First-set semantics:** a leaf parser (including `EpsilonParser`) IS inserted into its own
+    first_set as a "start parser" (just like a char parser). When epsilon is a child of a choice or
+    sequence, its own ptr propagates as a non-sentinel entry in the parent's first_set. The
+    nullable sentinel is separate. So `choice2(char('a'), epsilon())` has a first_set with 2
+    non-sentinel entries (not 1 as might be expected).
+
+  **What remains to implement (the remaining 11 rules):**
+  - **The 13 rules total** (dart class names): `CharacterRepeater`, `DuplicateParser`,
+    `LeftRecursion`, `NestedChoice`, `NullableRepeater` ✓, `OverlappingChoice`, `RepeatedChoice`,
+    `UnnecessaryFlatten`, `UnnecessaryResolvable`, `UnoptimizedFlatten`, `UnreachableChoice`,
+    `UnresolvedSettable` ✓, `UnusedResult`.
+  - **Rules that need only `children()` + kind flags (ready to implement):**
+    `LeftRecursion` (non-empty cycle_set), `NestedChoice` (is_choice child of is_choice),
+    `UnreachableChoice` (alternative after a nullable sibling), `CharacterRepeater` (is_char child
+    of is_repeating, should use CharacterRepeatingParser instead), `UnnecessaryFlatten`
+    (is_input wrapping a parser whose result is already a string/already flattened),
+    `UnoptimizedFlatten` (is_input wrapping is_repeating(is_char) — should be plus_string/etc.).
+  - **Rules that need deep structural equality (still deferred):** `DuplicateParser`,
+    `RepeatedChoice`, `OverlappingChoice`, `UnnecessaryResolvable`.
+  - **Tests for remaining rules** are already stubbed with TODO comments at the bottom of
+    `tests/linter_tests.rs` (LeftRecursion, NestedChoice, UnreachableChoice, CharacterRepeater,
+    UnnecessaryFlatten, UnoptimizedFlatten — see the comments for the specific test cases).
+
+  The kind-flag approach (methods on `HasChildren`) is fully working. The 13 dart classes map to
+  `HasChildren` method overrides: `is_repeating`/`is_separated_repeating`/`is_possessive_repeating`/
+  `repeating_min`, `is_sequence`/`is_choice`/`is_settable`/`is_undefined`/`is_directly_nullable`,
+  `is_char`/`is_string_predicate`/`is_input`/`is_newline`/`is_char_repeating`/`is_map_parser`/
+  `is_constant_parser`/`is_token_parser`/`is_only_if` — all already defined on `HasChildren` with
+  appropriate overrides in each parser type.
 
   Other deferred reflection bits: `copy` (parser-graph copying) and deep-equality — needed for
   dart's `expectParserInvariants` assertions and the equality-dependent linter rules above. Regex
   char parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`"
   above.
+
+  **Deferred: cycle-safe recursive `Debug` for `SettableParser`/`SettableParserRef`.** Surfaced
+  while writing `LeftRecursion`'s message (which formats each `analyzer.cycle_set(parser)` member
+  via `{:?}`): `SettableParserRef`'s `Debug` just does `format!("{:?}", self.delegate)` on a
+  `Weak<...>`, and `std::rc::Weak`'s own `Debug` is hardcoded to always print the literal string
+  `"(Weak)"` — it never upgrades, so this is no more informative than the placeholder it replaced.
+  The safe-but-uninformative behavior is not an accident to just patch over: naively upgrading and
+  recursing into the target risks genuine infinite recursion/stack overflow for a real self-
+  reference (`s.set(s.borrow())`), where the target *is* the same `SettableParserRef` being
+  printed — `Weak`'s refusal to look past itself is accidentally what keeps today's code safe.
+  dart sidesteps this entirely because `Parser.toString()` is just `'$runtimeType'` (shallow, never
+  recurses into children) — there's no equivalent "just print the class name" for a `dyn` trait
+  object in Rust without hand-building one from `HasChildren`'s existing kind-flags
+  (`is_settable`/`is_choice`/`is_sequence`/`is_char`/etc., all already non-recursive one-hop checks
+  built for the linter). Two designs discussed, not yet built:
+  - Minimal: a `kind_name(&Rc<dyn HasChildren>) -> &'static str` built from the kind flags, used by
+    `SettableParserRef::fmt` after `.upgrade()` to print e.g. `"-> SettableParser"` instead of
+    `"(Weak)"` — bounded depth 1 always (never calls `{:?}` on the target, just inspects its kind),
+    so no recursion risk. Cheap, but still not a full "show me the structure" debug view.
+  - Fuller: genuinely recursive `Debug` with cycle detection, so e.g. `dbg!(some_recursive_grammar)`
+    prints the real nested structure and only stops with a back-reference marker
+    (`"-> #2 (cycle)"`) when it's about to revisit a node already on the current print's path.
+    Needs a `thread_local!` `Vec<*const ()>` "currently visiting" stack (reusing the `ptr()`/
+    `PtrKey` pattern from `src/reflection/analyzer.rs:8-12` for the identity) — `Debug::fmt`'s
+    fixed `(&self, &mut Formatter) -> Result` signature has no room to thread state as a parameter,
+    so cross-call state needs either this or a dedicated non-`Debug` pretty-printer function taking
+    an explicit `&mut HashSet<*const ()>` (the latter is arguably cleaner — no global mutable
+    state — but means callers can no longer just reach for `{:?}`). Must use a `Drop` guard to pop
+    the stack on every exit path (including `?`-propagated ones), not manual push/pop, or an early
+    return leaves stale entries poisoning later prints in the same thread. For the numbering to be
+    legible, both `SettableParser::fmt` and `SettableParserRef::fmt` need to tag their *own* output
+    with their push-time stack position, not just detect repeats. Scope question: a cycle can only
+    *correctly* close through `SettableParserRef` (the documented `.borrow()`-for-back-references
+    rule), so guarding just that type covers every `#[grammar]`-generated grammar; guarding
+    `SettableParser::fmt` too is defense-in-depth against someone violating that rule by hand (see
+    the next entry — that violation is a real, distinct bug worth its own detector, not just safe
+    `Debug` output).
+  - Not blocking `LeftRecursion` itself: `Analyzer::cycle_set` already returns the flat,
+    deduplicated cycle membership directly (no need to rediscover it by recursing through `Debug`),
+    so the minimal `kind_name` option is enough to make that one rule's message useful; the fuller
+    recursive design is a bigger, more generally-useful thing (ad hoc debugging of any recursive
+    grammar) that doesn't need to gate finishing the remaining linter rules.
+
+  **Deferred, Rust-specific — no dart equivalent, dart has no strong/weak distinction to get
+  wrong: detect `s.set(s.clone())` used where `s.set(s.borrow())` was meant.** This is a real,
+  easy-to-make mistake given the codebase's own "Rule: use `.clone()` for forward references; use
+  `.borrow()` only for back-references" convention (Key Design Decisions) — get it backwards on a
+  self/mutual reference and you've built a genuine strong `Rc` cycle: leaks memory forever (never
+  reaches refcount 0) and, per the entry above, would stack-overflow on `Debug` print once/if that
+  becomes recursive. **Investigated whether this is detectable with today's infrastructure — it is
+  not, without a new signal.** The reason: `s.set(s.borrow())` (correct) and `s.set(s.clone())`
+  (broken) produce *byte-for-byte identical* `HasChildren::children()` graphs. Traced both by hand:
+  in the correct case, `SettableParserRef::children()` upgrades the `Weak` and returns the current
+  `RefCell` content, which (post-`.set()`) is the `SettableParserRef` itself — a length-1 self-loop
+  at that node's own `Rc::as_ptr`. In the broken case, `SettableParser::children()` reads the same
+  `RefCell` (shared via the `.clone()`) and gets back the exact same shape: a length-1 self-loop at
+  that node's own `Rc::as_ptr`. `Analyzer`'s whole graph-walk is built on `Rc::as_ptr` identity over
+  `children()` — which erases whether an edge was a strong `Rc` or a `Weak` upgrade, so nothing
+  built purely on `children()` (including `cycle_set`, which is further scoped to zero-width/
+  nullable-prefix reachability for left-recursion specifically — a different, narrower question
+  than "is there an unbroken strong cycle anywhere") can tell these two cases apart. To make it
+  detectable: add a new `HasChildren::is_weak_reference(&self) -> bool { false }` default,
+  overridden `true` only by `SettableParserRef` (the *only* type that can legitimately close a
+  cycle — it exists exclusively via `.borrow()`, never by misuse). Then a new rule needs its own
+  graph walk (can't reuse `cycle_set` as-is — that one deliberately stops at a sequence's first
+  non-nullable child, which is wrong here: a strong `Rc` cycle leaks memory and crashes `Debug`
+  print regardless of whether the recursive edge is reachable without consuming input, e.g.
+  `s.set(seq2(char('a'), s.clone()).map(...))` parses fine — no `LeftRecursion` issue, the `'a'`
+  breaks the infinite-parse-loop concern — but still leaks and still isn't `Debug`-safe) — walk
+  *all* children unconditionally, and flag any path that revisits a node already on the current
+  path without having crossed an `is_weak_reference() == true` node along that segment. Severity
+  probably `Error` (it's an unconditional leak + latent crash, not a style nit). Name TBD (not one
+  of the 13 dart rule names, since dart has no strong/weak split to misuse) — something like
+  `UnbrokenSettableCycle` or `StrongSelfReference`.
   (`not_with_message`/`neg`/`neg_with_message`/`pattern`/`pattern_ci`/custom-delimiter
   `trim_with`/greedy repeaters/graceful `undefined()` failure/`opt_with`/`continuation`
   (`call_cc`)/`range`/`accept`/`accept_at`/`elements_at` (dart's `permute`, with a `permute`

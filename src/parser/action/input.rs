@@ -16,6 +16,14 @@ impl<T: Debug + 'static> HasChildren for InputParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
     }
+
+    fn is_input(&self) -> bool {
+        true
+    }
+
+    fn input_message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
 }
 
 impl<T: Debug + 'static> Parser<String> for InputParser<T> {

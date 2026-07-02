@@ -68,16 +68,42 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
         })
         .collect();
 
+    // `start` is stored as `Rc<SettableParser<T>>`, not a bare `SettableParser<T>` like every
+    // other rule field — it's the only field the struct's own generated `HasChildren::children()`
+    // exposes directly (see below), and that method gets called repeatedly by any graph walker
+    // (e.g. `Analyzer`'s fixed-point loops). `HasChildren::children()` must be pointer-stable
+    // (the same call must return the same `Rc` identity every time), since walkers key their
+    // discovered-node maps off `Rc::as_ptr`. A bare field wrapped fresh on each call
+    // (`Rc::new(self.start.clone())`) would allocate a *new* Rc — with a new pointer — on every
+    // invocation, so a second call disagrees with the first about "the start rule's identity",
+    // which crashes any walker that revisits a node (as `Analyzer` does). Every other rule field
+    // is only ever exposed through `.borrow()` (a `SettableParserRef`, resolved via `Weak`
+    // upgrade back to the one shared `RefCell` — already pointer-stable at the leaf, see
+    // `SettableParserRef::children()`), so this treatment is deliberately scoped to `start` alone.
     let field_decls: Vec<TokenStream2> = owned_fns
         .iter()
         .map(|f| {
             let name = &f.sig.ident;
             let ty = parser_type(f);
-            quote_spanned! { f.sig.ident.span() => #name: SettableParser<#ty> }
+            if name == "start" {
+                quote_spanned! { f.sig.ident.span() => #name: std::rc::Rc<SettableParser<#ty>> }
+            } else {
+                quote_spanned! { f.sig.ident.span() => #name: SettableParser<#ty> }
+            }
         })
         .collect();
 
-    let field_names: Vec<_> = owned_fns.iter().map(|f| &f.sig.ident).collect();
+    let field_inits: Vec<TokenStream2> = owned_fns
+        .iter()
+        .map(|f| {
+            let name = &f.sig.ident;
+            if name == "start" {
+                quote_spanned! { f.sig.ident.span() => #name: std::rc::Rc::new(#name) }
+            } else {
+                quote_spanned! { f.sig.ident.span() => #name }
+            }
+        })
+        .collect();
 
     let start_fn = owned_fns
         .iter()
@@ -113,17 +139,19 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
                 #(#undefined_decls)*
                 #(#set_calls)*
                 Self {
-                    #(#field_names,)*
+                    #(#field_inits,)*
                 }
             }
             #(#public_parsers)*
         }
 
         // The grammar's immediate child is its start rule; a linter walks transitively from
-        // there through every rule reachable via `SettableParserRef`.
+        // there through every rule reachable via `SettableParserRef`. `self.start.clone()` is a
+        // plain `Rc` clone (pointer-stable across calls) now that `start` is stored as
+        // `Rc<SettableParser<T>>` — see the comment on `field_decls` above.
         impl HasChildren for #struct_name {
             fn children(&self) -> Vec<std::rc::Rc<dyn HasChildren>> {
-                vec![std::rc::Rc::new(self.start.clone())]
+                vec![self.start.clone()]
             }
         }
 

@@ -62,6 +62,10 @@ impl HasChildren for PredicateParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_string_predicate(&self) -> bool {
+        true
+    }
 }
 
 impl Parser<String> for PredicateParser {

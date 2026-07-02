@@ -27,6 +27,10 @@ macro_rules! choice_impl {
             fn children(&self) -> Vec<Rc<dyn HasChildren>> {
                 vec![$(self.$value.clone()),+]
             }
+
+            fn is_choice(&self) -> bool {
+                true
+            }
         }
 
         impl <T: Debug + 'static> Parser<T> for $name<T> {

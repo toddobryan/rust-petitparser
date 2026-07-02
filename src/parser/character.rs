@@ -179,6 +179,10 @@ impl HasChildren for CharParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_char(&self) -> bool {
+        true
+    }
 }
 
 impl Parser<char> for CharParser {
@@ -250,6 +254,10 @@ impl Debug for PredicateCharParser {
 impl HasChildren for PredicateCharParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn is_char(&self) -> bool {
+        true
     }
 }
 

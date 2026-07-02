@@ -15,6 +15,22 @@ impl<T: Debug + 'static> HasChildren for PossessiveRepeatingParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
     }
+
+    fn is_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_possessive_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        self.min == 0
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        Some(self.min)
+    }
 }
 
 impl<T> Parser<Vec<T>> for PossessiveRepeatingParser<T>

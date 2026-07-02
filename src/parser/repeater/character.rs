@@ -45,6 +45,14 @@ impl HasChildren for CharacterRepeatingParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_char_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        self.min == 0
+    }
 }
 
 impl Parser<String> for CharacterRepeatingParser {

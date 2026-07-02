@@ -14,6 +14,10 @@ impl<T: Debug + 'static> HasChildren for TokenParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.parser.clone()]
     }
+
+    fn is_token_parser(&self) -> bool {
+        true
+    }
 }
 
 impl<T> Parser<Token<T>> for TokenParser<T>

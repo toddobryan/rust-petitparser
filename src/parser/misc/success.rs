@@ -13,6 +13,10 @@ impl<T: Clone + Debug> HasChildren for SuccessParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
     }
+
+    fn is_directly_nullable(&self) -> bool {
+        true
+    }
 }
 
 impl<T> Parser<T> for SuccessParser<T>

@@ -19,6 +19,18 @@ impl<T: Debug + 'static, TC: Debug + 'static> HasChildren for LazyRepeatingParse
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.limit.clone()]
     }
+
+    fn is_repeating(&self) -> bool {
+        true
+    }
+
+    fn is_directly_nullable(&self) -> bool {
+        self.min == 0
+    }
+
+    fn repeating_min(&self) -> Option<usize> {
+        Some(self.min)
+    }
 }
 
 impl<T, TC> Parser<Vec<T>> for LazyRepeatingParser<T, TC>

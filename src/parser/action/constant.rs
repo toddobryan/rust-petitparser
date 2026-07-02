@@ -16,6 +16,10 @@ impl<T: Debug + 'static, V: Debug> HasChildren for ConstantParser<T, V> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
     }
+
+    fn is_constant_parser(&self) -> bool {
+        true
+    }
 }
 
 impl<T, V> Parser<V> for ConstantParser<T, V>

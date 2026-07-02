@@ -27,6 +27,10 @@ macro_rules! impl_seq {
             fn children(&self) -> Vec<Rc<dyn HasChildren>> {
                 vec![$(self.$field.clone()),+]
             }
+
+            fn is_sequence(&self) -> bool {
+                true
+            }
         }
 
         impl <$($value),+> Parser<($($value,)+)> for $name<$($value),+>
