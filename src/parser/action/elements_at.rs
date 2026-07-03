@@ -22,9 +22,9 @@ impl<I: Debug + 'static, T: Debug> HasChildren for ElementsAtParser<I, T> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::ElementsAt {
-            indexes: self.indexes.clone(),
+            indexes: &self.indexes,
         }
     }
 

@@ -39,9 +39,9 @@ impl<T> HasChildren for UndefinedParser<T> {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Undefined {
-            message: self.message.clone(),
+            message: &self.message,
         }
     }
 
@@ -104,7 +104,7 @@ impl<T: 'static> HasChildren for SettableParser<T> {
         vec![self.delegate.borrow().clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Settable
     }
 
@@ -162,7 +162,7 @@ impl<T: 'static> HasChildren for SettableParserRef<T> {
         ]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Settable
     }
 }

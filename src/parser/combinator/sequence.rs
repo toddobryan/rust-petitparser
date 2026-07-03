@@ -29,7 +29,7 @@ macro_rules! impl_seq {
                 vec![$(self.$field.clone()),+]
             }
 
-            fn kind(&self) -> ParserKind {
+            fn kind(&self) -> ParserKind<'_> {
                 ParserKind::Seq
             }
 

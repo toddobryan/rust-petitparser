@@ -27,7 +27,7 @@ impl<Aft: Debug + 'static, Bef: Debug + 'static, T: Debug + 'static> HasChildren
         ]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Skip
     }
 }

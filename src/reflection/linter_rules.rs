@@ -1,8 +1,13 @@
 use std::rc::Rc;
 
 use crate::{
-    core::parser::HasChildren, reflection::{
-        analyzer::{Analyzer, ptr}, equality::{is_parser_iterable_equal, parsers_equal}, formatting::format_iterable, linter::{LinterIssue, LinterRule, LinterType}, path::ParserPath,
+    core::parser::HasChildren,
+    reflection::{
+        analyzer::{Analyzer, ptr},
+        equality::{is_parser_iterable_equal, parsers_equal},
+        formatting::format_iterable,
+        linter::{LinterIssue, LinterRule, LinterType},
+        path::ParserPath,
     },
 };
 

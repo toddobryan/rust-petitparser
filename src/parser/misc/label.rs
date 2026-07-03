@@ -18,10 +18,8 @@ impl<T: Clone + Debug + 'static> HasChildren for LabeledParser<T> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
-        ParserKind::Labeled {
-            label: self.label.clone(),
-        }
+    fn kind(&self) -> ParserKind<'_> {
+        ParserKind::Labeled { label: &self.label }
     }
 }
 

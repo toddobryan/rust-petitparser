@@ -46,10 +46,10 @@ impl HasChildren for RegexParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Regex {
-            pattern: self.regex.to_string(),
-            message: self.message.clone(),
+            pattern: self.regex.as_str(),
+            message: &self.message,
         }
     }
 }

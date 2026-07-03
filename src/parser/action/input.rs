@@ -31,9 +31,9 @@ impl<T: Debug + 'static> HasChildren for InputParser<T> {
         self.message.as_deref()
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Input {
-            message: self.message.clone(),
+            message: self.message.as_deref(),
         }
     }
 }

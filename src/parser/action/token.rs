@@ -16,7 +16,7 @@ impl<T: Debug + 'static> HasChildren for TokenParser<T> {
         vec![self.parser.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Token
     }
 

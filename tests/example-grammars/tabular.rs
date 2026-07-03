@@ -21,8 +21,8 @@ impl HasChildren for TabularDefinition {
         ]
     }
 
-    // Bespoke parser with no dedicated ParserKind variant → the opaque catch-all.
-    fn kind(&self) -> ParserKind {
+    // Bespoke parser with no dedicated ParserKind<'_> variant → the opaque catch-all.
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Other(NeverEq)
     }
 }

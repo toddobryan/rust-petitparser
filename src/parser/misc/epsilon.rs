@@ -15,7 +15,7 @@ impl<T: Clone + Debug> HasChildren for EpsilonParser<T> {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Epsilon(NeverEq)
     }
 

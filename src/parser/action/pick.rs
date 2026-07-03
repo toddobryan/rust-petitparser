@@ -22,7 +22,7 @@ impl<I: Debug + 'static, T: Debug> HasChildren for PickParser<I, T> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Pick { index: self.index }
     }
 

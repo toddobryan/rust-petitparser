@@ -24,9 +24,9 @@ impl HasChildren for EndOfInputParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::EndOfInput {
-            message: self.message.clone(),
+            message: &self.message,
         }
     }
 }

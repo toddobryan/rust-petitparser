@@ -25,9 +25,9 @@ impl HasChildren for FailureParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Failure {
-            message: self.message.clone(),
+            message: self.message.as_deref(),
         }
     }
 }

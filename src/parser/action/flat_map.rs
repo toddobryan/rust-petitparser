@@ -21,7 +21,7 @@ impl<P2: Debug, T: Debug + 'static, T2: Debug> HasChildren for FlatMapParser<P2,
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::FlatMap(NeverEq)
     }
 }

@@ -155,7 +155,7 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
             }
 
             // The grammar behaves as its start rule; delegate its kind (a `Settable`).
-            fn kind(&self) -> ParserKind {
+            fn kind(&self) -> ParserKind<'_> {
                 self.start.kind()
             }
         }

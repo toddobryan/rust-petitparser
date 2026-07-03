@@ -40,7 +40,7 @@ impl<T: Debug + 'static> HasChildren for OnlyIfParser<T> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::OnlyIf {
             predicate: self.predicate as PtrKey,
             factory: self.factory.map(|f| f as PtrKey),

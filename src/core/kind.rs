@@ -4,15 +4,15 @@ pub type PtrKey = *const ();
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParserKind {
+pub enum ParserKind<'a> {
     And,
     Char {
-        kind: CharKind,
-        message: Option<String>,
+        kind: &'a CharKind,
+        message: Option<&'a str>,
     },
     CharacterRepeating {
         test: PtrKey,
-        message: Option<String>,
+        message: Option<&'a str>,
         min: usize,
         max: Option<usize>,
     },
@@ -22,14 +22,14 @@ pub enum ParserKind {
     Constant(NeverEq),
     Continuation(NeverEq),
     ElementsAt {
-        indexes: Vec<i32>,
+        indexes: &'a [i32],
     },
     EndOfInput {
-        message: String,
+        message: &'a str,
     },
     Epsilon(NeverEq),
     Failure {
-        message: Option<String>,
+        message: Option<&'a str>,
     },
     FlatMap(NeverEq),
     GreedyRepeating {
@@ -37,10 +37,10 @@ pub enum ParserKind {
         max: Option<usize>,
     },
     Input {
-        message: Option<String>,
+        message: Option<&'a str>,
     },
     Labeled {
-        label: String,
+        label: &'a str,
     },
     LazyRepeating {
         min: usize,
@@ -49,7 +49,7 @@ pub enum ParserKind {
     Map(NeverEq),
     Newline,
     Not {
-        message: String,
+        message: &'a str,
     },
     OnlyIf {
         predicate: PtrKey,
@@ -65,16 +65,16 @@ pub enum ParserKind {
     },
     PredicateChar {
         test: PtrKey,
-        message: Option<String>,
+        message: Option<&'a str>,
     },
     Predicate {
         predicate: PtrKey,
         length: usize,
-        message: String,
+        message: &'a str,
     },
     Regex {
-        pattern: String,
-        message: String,
+        pattern: &'a str,
+        message: &'a str,
     },
     SeparatedListRepeating {
         min: usize,
@@ -87,7 +87,7 @@ pub enum ParserKind {
     Success(NeverEq),
     Token,
     Undefined {
-        message: String,
+        message: &'a str,
     },
     /// Catch-all for custom `HasChildren` implementors outside this crate's own parser set
     /// (e.g. `TabularDefinition`). Opaque to structural equality — see the note about opaque

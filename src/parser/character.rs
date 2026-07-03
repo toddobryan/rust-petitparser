@@ -181,10 +181,10 @@ impl HasChildren for CharParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Char {
-            kind: self.kind.clone(),
-            message: self.message.clone(),
+            kind: &self.kind,
+            message: self.message.as_deref(),
         }
     }
 
@@ -264,10 +264,10 @@ impl HasChildren for PredicateCharParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::PredicateChar {
             test: Rc::as_ptr(&self.test) as PtrKey,
-            message: self.message.clone(),
+            message: self.message.as_deref(),
         }
     }
 

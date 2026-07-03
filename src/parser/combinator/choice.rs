@@ -29,7 +29,7 @@ macro_rules! choice_impl {
                 vec![$(self.$value.clone()),+]
             }
 
-            fn kind(&self) -> ParserKind {
+            fn kind(&self) -> ParserKind<'_> {
                 ParserKind::Choice { joiner: self.joiner as PtrKey }
             }
 

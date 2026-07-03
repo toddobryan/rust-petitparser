@@ -45,7 +45,7 @@ impl<T: 'static, T2, H> HasChildren for ContinuationParser<T, T2, H> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Continuation(NeverEq)
     }
 }

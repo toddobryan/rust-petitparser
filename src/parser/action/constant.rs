@@ -18,7 +18,7 @@ impl<T: Debug + 'static, V: Debug> HasChildren for ConstantParser<T, V> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Constant(NeverEq)
     }
 

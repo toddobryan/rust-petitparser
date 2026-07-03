@@ -23,7 +23,7 @@ impl<T: Debug + 'static> HasChildren for GreedyRepeatingParser<T> {
         vec![self.delegate.clone(), self.limit.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::GreedyRepeating {
             min: self.min,
             max: self.max,

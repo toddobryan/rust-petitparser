@@ -17,7 +17,7 @@ impl<T: Debug + 'static> HasChildren for PossessiveRepeatingParser<T> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::PossessiveRepeating {
             min: self.min,
             max: self.max,

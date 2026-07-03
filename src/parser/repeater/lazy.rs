@@ -21,7 +21,7 @@ impl<T: Debug + 'static, TC: Debug + 'static> HasChildren for LazyRepeatingParse
         vec![self.delegate.clone(), self.limit.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::LazyRepeating {
             min: self.min,
             max: self.max,

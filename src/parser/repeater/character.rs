@@ -47,10 +47,10 @@ impl HasChildren for CharacterRepeatingParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::CharacterRepeating {
             test: Rc::as_ptr(&self.test) as PtrKey,
-            message: self.message.clone(),
+            message: self.message.as_deref(),
             min: self.min,
             max: self.max,
         }

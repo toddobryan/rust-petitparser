@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 /// whether in a list of the form elem sep elem sep elem ...
 /// the final element must, can, or cannot be followed by a separator
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Trailing {
     Disallowed,
     Allowed,
@@ -126,11 +126,11 @@ impl<T: Debug + 'static, Sep: Debug + 'static> HasChildren
         vec![self.delegate.clone(), self.separator.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::SeparatedListRepeating {
             min: self.min,
             max: self.max,
-            trailing: self.trailing.clone(),
+            trailing: self.trailing,
         }
     }
 

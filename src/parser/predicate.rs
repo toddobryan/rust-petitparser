@@ -64,11 +64,11 @@ impl HasChildren for PredicateParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Predicate {
             predicate: Rc::as_ptr(&self.predicate) as PtrKey,
             length: self.length,
-            message: self.message.clone(),
+            message: &self.message,
         }
     }
 

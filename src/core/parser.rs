@@ -29,7 +29,7 @@ pub trait Parser<T: 'static>: Debug + HasChildren + 'static {
 /// `Rc<dyn HasChildren>` (trait upcasting), which is what makes combinator `children()`
 /// impls one-liners under the `Rc`-storage design.
 pub trait HasChildren: Debug {
-    fn kind(&self) -> ParserKind;
+    fn kind(&self) -> ParserKind<'_>;
 
     fn children(&self) -> Vec<Rc<dyn HasChildren>>;
 
@@ -143,7 +143,7 @@ impl<P: HasChildren + ?Sized> HasChildren for Rc<P> {
         (**self).children()
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         (**self).kind()
     }
 

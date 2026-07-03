@@ -28,7 +28,7 @@ impl<T: 'static, F> HasChildren for MapParser<T, F> {
         vec![self.delegate.clone()]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Map(NeverEq)
     }
 

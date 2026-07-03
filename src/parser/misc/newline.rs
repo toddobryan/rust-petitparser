@@ -14,7 +14,7 @@ impl HasChildren for NewlineParser {
         vec![]
     }
 
-    fn kind(&self) -> ParserKind {
+    fn kind(&self) -> ParserKind<'_> {
         ParserKind::Newline
     }
 
