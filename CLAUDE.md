@@ -858,9 +858,43 @@ deliberately skipped — see the "Rule status" subsection in the test-parity bul
 full breakdown, the equality core, and the two deferred `ParserKind`/`Rc<str>` refactors). No
 single obvious "start here" now — candidate next steps: the deferred equality/message refactors,
 the `Other(Rc<dyn CustomParserKind>)` extension point for custom-parser equality, porting dart's
-`findPath`/`findAllPaths`/`allChildren` reflection *tests*, or continuing the
+`findPath`/`findAllPaths`/`allChildren` reflection *tests*, the debug tools
+(`trace`/`progress`/`profile`, gated on porting `transformParser`+`copy` first), or continuing the
 `dart-petitparser-examples` grammar ports (lisp/prolog/regexp). Everything in this section is now
 roughly equal priority.
+
+- **Debug tools (`trace`/`progress`/`profile`) — not ported, gated on `transformParser`+`copy`.**
+  Dart's `lib/debug.dart` exposes three parser-instrumentation tools (`lib/src/debug/{trace,
+  progress,profile}.dart`):
+  - `trace(parser)` — prints an indented enter/exit tree of every parser activation and its
+    Success/Failure result.
+  - `progress(parser)` — prints a `*`-per-input-position bar as it parses; backward jumps
+    visualize backtracking.
+  - `profile(parser)` — per-parser activation count + total microseconds, the "where is my grammar
+    spending time" view.
+  **Genuine motivation, not just parity:** `profile`/`progress` are exactly the tools for the
+  backtracking-cost concerns this codebase keeps flagging (the `Rc`-storage tradeoff, the
+  no-packrat/exponential-backtracking note). So these are worth building *for our own debugging*,
+  not only for completeness.
+  **Why they're gated:** all three are literally
+  `transformParser(root, (parser) => parser.callCC(...logging...))` — they rewrap *every* node in
+  the graph with a `callCC` interceptor. That needs `transformParser` (`reflection/transform.dart`),
+  which rebuilds the parser graph, which in turn needs a `Parser.copy()`-style
+  reconstruct-with-new-children on every parser type. We have the `callCC`/`ContinuationParser`
+  primitive already (`src/parser/ext.rs`), but **not** `transformParser` and **not** `copy()` — the
+  latter deliberately skipped (see "Key Design Decisions": our `SettableParser`/`.borrow()` trick
+  handles *recursion* without graph-copying, but graph *rewriting* is a separate capability we never
+  built).
+  **So the real task is the prerequisite**, and it's the harder half: port `transformParser` +
+  a `copy_with_children(new_children)` method across every parser type. That's the same
+  downcast-and-rebuild shape as the `kind()` sweep but harder — it must *reconstruct* a typed
+  parser from a `dyn` node (new instance with swapped children), not just read properties. The
+  cyclic-grammar case needs care too (dart's `transformParser` has dedicated loop handling — see
+  its `transform_test.dart` 'loop (existing)'/'loop (new)' cases, which we'd also want to port).
+  Once `transformParser`+`copy` exist, the three debug tools fall out almost directly from dart
+  (each is ~40 lines wrapping `callCC`). Recommended sequencing: treat `transformParser`/`copy` as
+  its own initiative; the debug tools (and `optimize`/`replace`/`resolve`, which share the same
+  dependency) are the payoff that follows.
 
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
@@ -1294,6 +1328,33 @@ roughly equal priority.
     mechanical change (every struct, constructor, `context.failure()` signature, `message_for`/
     `input_message`), orthogonal to the linter — do it as its own benchmark-driven pass. If done, an
     owned `ParserKind` becomes cheap too, softening the need for deferred refactor 1.
+  - **Deferred refactor 3 — collapse the ~18 `is_*` boolean flags into `kind()`. GATED ON
+    REFACTOR 1 (borrow `ParserKind`) — do that first.** Now that `kind()` encodes everything the
+    `HasChildren` booleans do, the flags (`is_char`/`is_choice`/`is_sequence`/`is_input`/
+    `is_repeating`/`is_map_parser`/…) are redundant: `p.is_char()` → `matches!(p.kind(),
+    ParserKind::Char { .. })`, etc. **Win:** ~73 override sites across ~30 files removed, `kind()`
+    becomes the single source of truth (a parser can't have `is_char()` disagree with `kind()`), the
+    `impl HasChildren for Rc<P>` blanket shrinks from ~18 delegations to just `kind()`+`children()`,
+    and custom parsers get *safer* (they return `Other`, so every `matches!` correctly yields
+    `false` — they can't lie by overriding a flag). **Why gated on #1:** `is_directly_nullable`/
+    `is_sequence` run inside the analyzer's fixpoint loops (`compute_first_sets` iterates to
+    convergence, hitting them on every node each pass); replacing cheap bools with
+    `matches!(p.kind(), …)` while `kind()` is *owned* builds+clones a whole `ParserKind` (message
+    `String`s, `CharKind`, `Vec<i32>`) per check just to discard it — a per-check allocation in a hot
+    loop. Borrowing `kind()` (refactor 1) makes `matches!` alloc-free, so the trade is only clean
+    afterward. **Three non-1:1 mappings to reproduce carefully** (the rest are trivial swaps):
+    (a) `is_repeating` covers *four* variants — `Possessive`/`Greedy`/`Lazy` **and
+    `SeparatedListRepeating`** (all four override it; forgetting the separated one silently breaks
+    `NullableRepeater` for separated repeaters); (b) `repeating_min` extracts the `min` field, so
+    it's a `match … { Possessive{min,..} | … => Some(min), _ => None }`, not a `matches!`;
+    (c) `is_directly_nullable` depends on field *values* (`min == 0` for repeaters, plus
+    `Epsilon`/`Position`/…), so its replacement needs `min: 0` patterns — reproduce its exact
+    per-type truth table. **One method resists:** `input_message()` returns a borrowed `&str` from
+    `self`, which an owned `kind()` can't hand back — but its only caller does `.is_none()`, i.e.
+    `matches!(kind, Input { message: None })`, so just don't try to recover the borrowing accessor
+    from `kind()` (after refactor 1 a borrowing accessor works too). The 63 analyzer+linter tests
+    cover semantic drift. `is_result_producing` (a default OR of several flags) becomes a `matches!`
+    over several variants.
 
   The kind-flag approach (methods on `HasChildren`) is fully working. The 13 dart classes map to
   `HasChildren` method overrides: `is_repeating`/`is_separated_repeating`/`is_possessive_repeating`/
@@ -1302,10 +1363,12 @@ roughly equal priority.
   `is_constant_parser`/`is_token_parser`/`is_only_if` — all already defined on `HasChildren` with
   appropriate overrides in each parser type.
 
-  Other deferred reflection bits: `copy` (parser-graph copying) and deep-equality — needed for
-  dart's `expectParserInvariants` assertions and the equality-dependent linter rules above. Regex
-  char parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`"
-  above.
+  Other deferred reflection bits: `copy`/`transformParser` (parser-graph copying + rewriting) —
+  still not ported, and now the gating dependency for the debug tools (see the dedicated "Debug
+  tools" entry below). Deep-equality is **done** (the `ParserKind`/`structural_eq` core landed with
+  the linter). `copy`/`transformParser` are also what dart's `expectParserInvariants` assertions and
+  `optimize`/`replace`/`resolve` machinery need, none of which we've ported. Regex char parsers are
+  no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`" above.
 
   **Parked (prototyped, reverted): `FnWithText` — capture a mapping function's source text for
   `Debug` output.** The pain point: a `MapParser` (and any function-carrying parser) prints
