@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -14,6 +15,13 @@ pub struct PossessiveRepeatingParser<T> {
 impl<T: Debug + 'static> HasChildren for PossessiveRepeatingParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::PossessiveRepeating {
+            min: self.min,
+            max: self.max,
+        }
     }
 
     fn is_repeating(&self) -> bool {

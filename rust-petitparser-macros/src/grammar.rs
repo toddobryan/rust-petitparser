@@ -153,6 +153,11 @@ pub(crate) fn grammar_impl(item: TokenStream2) -> TokenStream2 {
             fn children(&self) -> Vec<std::rc::Rc<dyn HasChildren>> {
                 vec![self.start.clone()]
             }
+
+            // The grammar behaves as its start rule; delegate its kind (a `Settable`).
+            fn kind(&self) -> ParserKind {
+                self.start.kind()
+            }
         }
 
         impl Parser<#start_type> for #struct_name {

@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::{Context, HasContext},
+    kind::ParserKind,
     parser::{HasChildren, Parser},
     result::ParseResult,
 };
@@ -20,6 +21,13 @@ pub struct GreedyRepeatingParser<T> {
 impl<T: Debug + 'static> HasChildren for GreedyRepeatingParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.limit.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::GreedyRepeating {
+            min: self.min,
+            max: self.max,
+        }
     }
 
     fn is_repeating(&self) -> bool {

@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
@@ -28,6 +29,12 @@ impl<T: Debug + 'static> HasChildren for InputParser<T> {
 
     fn input_message(&self) -> Option<&str> {
         self.message.as_deref()
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Input {
+            message: self.message.clone(),
+        }
     }
 }
 

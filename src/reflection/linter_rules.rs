@@ -1,23 +1,24 @@
 use std::rc::Rc;
 
 use crate::{
-    core::parser::HasChildren,
-    reflection::{
-        analyzer::Analyzer,
-        formatting::format_iterable,
-        linter::{LinterIssue, LinterRule, LinterType},
+    core::parser::HasChildren, reflection::{
+        analyzer::{Analyzer, ptr}, equality::{is_parser_iterable_equal, parsers_equal}, formatting::format_iterable, linter::{LinterIssue, LinterRule, LinterType}, path::ParserPath,
     },
 };
 
 pub const ALL_LINTER_RULES: &[&dyn LinterRule] = &[
     &CharacterRepeater,
+    &DuplicateParser,
     &LeftRecursion,
     &NestedChoice,
     &NullableRepeater,
+    &OverlappingChoice,
+    &RepeatedChoice,
     &UnnecessaryInput,
     &UnoptimizedInput,
     &UnreachableChoice,
     &UnresolvedSettable,
+    &UnusedResult,
 ];
 
 pub struct CharacterRepeater;
@@ -57,6 +58,45 @@ impl LinterRule for CharacterRepeater {
                     });
                 }
             }
+        }
+    }
+}
+
+pub struct DuplicateParser;
+
+impl LinterRule for DuplicateParser {
+    fn severity(&self) -> LinterType {
+        LinterType::Info
+    }
+
+    fn title(&self) -> &str {
+        "Duplicate parser"
+    }
+
+    fn run(
+        &self,
+        analyzer: &Analyzer,
+        parser: &Rc<dyn HasChildren>,
+        issues: &mut Vec<LinterIssue>,
+    ) {
+        let duplicates: Vec<&Rc<dyn HasChildren>> = analyzer
+            .parsers
+            .iter()
+            .filter(|p2| parsers_equal(parser, p2))
+            .collect();
+        if duplicates.len() > 1 && ptr(duplicates[0]) == ptr(parser) {
+            issues.push(LinterIssue {
+                title: self.title().to_string(),
+                severity: self.severity(),
+                description: format!(
+                    "{} instances of the parser {:?} exist in this \
+                        grammar. If possible, reuse the same parser instances to reduce \
+                        memory footprint and increase performance.",
+                    duplicates.len(),
+                    parser.clone()
+                ),
+                parser: parser.clone(),
+            });
         }
     }
 }
@@ -169,6 +209,96 @@ impl LinterRule for NullableRepeater {
                               loop when parsing."
                     .to_string(),
             });
+        }
+    }
+}
+
+pub struct OverlappingChoice;
+
+impl LinterRule for OverlappingChoice {
+    fn severity(&self) -> LinterType {
+        LinterType::Info
+    }
+
+    fn title(&self) -> &str {
+        "Overlapping choice"
+    }
+
+    fn run(
+        &self,
+        analyzer: &Analyzer,
+        parser: &Rc<dyn HasChildren>,
+        issues: &mut Vec<LinterIssue>,
+    ) {
+        if parser.is_choice() {
+            let children = parser.children();
+            for (i, child_i) in children.iter().enumerate() {
+                let first_i = analyzer.first_set(child_i);
+                for (j, child_j) in children.iter().enumerate().skip(i + 1) {
+                    let first_j = analyzer.first_set(child_j);
+                    if is_parser_iterable_equal(&first_i, &first_j) {
+                        issues.push(LinterIssue {
+                            title: self.title().to_string(),
+                            severity: self.severity(),
+                            description: format!(
+                                "The choices at index {i} and {j} have overlapping first-sets, \
+                                    which can be an indication of an inefficient grammar:\n
+                                    {}\n
+                                    If possible, try extracting common prefixes from choices.",
+                                format_iterable(&first_i, None)
+                            ),
+                            parser: parser.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub struct RepeatedChoice;
+
+impl LinterRule for RepeatedChoice {
+    fn severity(&self) -> LinterType {
+        LinterType::Warning
+    }
+
+    fn title(&self) -> &str {
+        "Repeated choice"
+    }
+
+    fn run(
+        &self,
+        _analyzer: &Analyzer,
+        parser: &Rc<dyn HasChildren>,
+        issues: &mut Vec<LinterIssue>,
+    ) {
+        if parser.is_choice() {
+            let children = parser.children();
+            for i in 0..children.len() {
+                for j in (i + 1)..children.len() {
+                    if parsers_equal(&children[i], &children[j]) {
+                        issues.push(LinterIssue {
+                            title: self.title().to_string(),
+                            severity: self.severity(),
+                            description: format!(
+                                "The choices at indexes {} and {} are identical:\n \
+                            {}: {:?}\n \
+                            {}: {:?}\n\
+                            The second choice can never succeed and can therefore be \
+                            removed.",
+                                i,
+                                j,
+                                i,
+                                children[i].clone(),
+                                j,
+                                children[j].clone()
+                            ),
+                            parser: parser.clone(),
+                        });
+                    }
+                }
+            }
         }
     }
 }
@@ -317,6 +447,57 @@ impl LinterRule for UnresolvedSettable {
                               recursive grammar definition."
                     .to_string(),
             });
+        }
+    }
+}
+
+pub struct UnusedResult;
+
+impl LinterRule for UnusedResult {
+    fn severity(&self) -> LinterType {
+        LinterType::Info
+    }
+
+    fn title(&self) -> &str {
+        "Unused result"
+    }
+
+    fn run(
+        &self,
+        analyzer: &Analyzer,
+        parser: &Rc<dyn HasChildren>,
+        issues: &mut Vec<LinterIssue>,
+    ) {
+        if parser.is_input() {
+            let deep_children = analyzer.all_children(parser);
+            let ignored_results: Vec<&Rc<dyn HasChildren>> = deep_children
+                .iter()
+                .filter(|p| p.is_result_producing())
+                .collect();
+            if !ignored_results.is_empty() {
+                let path = analyzer
+                    .find_path(parser, &|path: &ParserPath| {
+                        ignored_results
+                            .iter()
+                            .any(|ir| ptr(ir) == ptr(&path.target()))
+                    })
+                    .unwrap();
+                issues.push(LinterIssue {
+                    title: self.title().to_string(),
+                    severity: self.severity(),
+                    description: format!(
+                        "The flatten parser discards the result of its children and \
+                            instead returns the consumed input. Yet this flatten parser \
+                            (indirectly) refers to one or more other parsers that explicitly \
+                            produce a result which is then ignored when called from this \
+                            context:\n\
+                            {}\n\
+                            This might point to an inefficient grammar or a possible bug.",
+                        format_iterable(&path.parsers, Some(1))
+                    ),
+                    parser: parser.clone(),
+                });
+            }
         }
     }
 }

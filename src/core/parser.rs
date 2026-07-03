@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::ParserKind;
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -28,6 +29,8 @@ pub trait Parser<T: 'static>: Debug + HasChildren + 'static {
 /// `Rc<dyn HasChildren>` (trait upcasting), which is what makes combinator `children()`
 /// impls one-liners under the `Rc`-storage design.
 pub trait HasChildren: Debug {
+    fn kind(&self) -> ParserKind;
+
     fn children(&self) -> Vec<Rc<dyn HasChildren>>;
 
     fn is_directly_nullable(&self) -> bool {
@@ -105,6 +108,24 @@ pub trait HasChildren: Debug {
     fn is_only_if(&self) -> bool {
         false
     }
+
+    fn is_elements_at_parser(&self) -> bool {
+        false
+    }
+
+    fn is_pick_parser(&self) -> bool {
+        false
+    }
+
+    fn is_result_producing(&self) -> bool {
+        self.is_constant_parser()
+            || self.is_input()
+            || self.is_map_parser()
+            || self.is_elements_at_parser()
+            || self.is_pick_parser()
+            || self.is_token_parser()
+            || self.is_only_if()
+    }
 }
 
 impl<T: 'static, P: Parser<T> + ?Sized> Parser<T> for Rc<P> {
@@ -120,6 +141,10 @@ impl<T: 'static, P: Parser<T> + ?Sized> Parser<T> for Rc<P> {
 impl<P: HasChildren + ?Sized> HasChildren for Rc<P> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         (**self).children()
+    }
+
+    fn kind(&self) -> ParserKind {
+        (**self).kind()
     }
 
     fn is_directly_nullable(&self) -> bool {

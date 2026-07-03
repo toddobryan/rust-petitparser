@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::{NeverEq, ParserKind};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::Debug;
@@ -15,6 +16,10 @@ pub struct ConstantParser<T, V> {
 impl<T: Debug + 'static, V: Debug> HasChildren for ConstantParser<T, V> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Constant(NeverEq)
     }
 
     fn is_constant_parser(&self) -> bool {

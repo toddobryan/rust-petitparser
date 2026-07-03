@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use crate::core::result::Success;
@@ -26,6 +27,10 @@ macro_rules! impl_seq {
         {
             fn children(&self) -> Vec<Rc<dyn HasChildren>> {
                 vec![$(self.$field.clone()),+]
+            }
+
+            fn kind(&self) -> ParserKind {
+                ParserKind::Seq
             }
 
             fn is_sequence(&self) -> bool {

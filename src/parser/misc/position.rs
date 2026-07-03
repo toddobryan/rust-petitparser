@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::rc::Rc;
@@ -9,6 +10,10 @@ pub struct PositionParser;
 impl HasChildren for PositionParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Position
     }
 
     fn is_directly_nullable(&self) -> bool {

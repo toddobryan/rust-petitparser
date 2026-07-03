@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult, Success};
 use crate::prelude::HasContext;
@@ -15,6 +16,10 @@ pub struct AndParser<T> {
 impl<T: Debug + 'static> HasChildren for AndParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::And
     }
 }
 
@@ -44,6 +49,12 @@ pub struct NotParser<T> {
 impl<T: Debug + 'static> HasChildren for NotParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Not {
+            message: self.message.clone(),
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::{ParserKind, PtrKey};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use crate::parser::repeater::character::CharacterRepeatingParser;
@@ -180,6 +181,13 @@ impl HasChildren for CharParser {
         vec![]
     }
 
+    fn kind(&self) -> ParserKind {
+        ParserKind::Char {
+            kind: self.kind.clone(),
+            message: self.message.clone(),
+        }
+    }
+
     fn is_char(&self) -> bool {
         true
     }
@@ -254,6 +262,13 @@ impl Debug for PredicateCharParser {
 impl HasChildren for PredicateCharParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::PredicateChar {
+            test: Rc::as_ptr(&self.test) as PtrKey,
+            message: self.message.clone(),
+        }
     }
 
     fn is_char(&self) -> bool {

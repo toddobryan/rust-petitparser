@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::{NeverEq, ParserKind};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Formatter};
@@ -25,6 +26,10 @@ impl<T: 'static, F> Debug for MapParser<T, F> {
 impl<T: 'static, F> HasChildren for MapParser<T, F> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Map(NeverEq)
     }
 
     fn is_map_parser(&self) -> bool {

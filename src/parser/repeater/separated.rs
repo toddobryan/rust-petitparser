@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use std::fmt::{Debug, Display};
@@ -123,6 +124,14 @@ impl<T: Debug + 'static, Sep: Debug + 'static> HasChildren
 {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.separator.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::SeparatedListRepeating {
+            min: self.min,
+            max: self.max,
+            trailing: self.trailing.clone(),
+        }
     }
 
     fn is_repeating(&self) -> bool {

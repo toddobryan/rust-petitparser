@@ -3,11 +3,15 @@ use std::{
     rc::Rc,
 };
 
-use crate::{core::parser::HasChildren, parser::misc::epsilon::epsilon};
+use crate::{
+    core::parser::HasChildren,
+    parser::misc::epsilon::epsilon,
+    reflection::path::{ParserPath, depth_first_search},
+};
 
 type PtrKey = *const ();
 
-fn ptr(p: &Rc<dyn HasChildren>) -> PtrKey {
+pub(crate) fn ptr(p: &Rc<dyn HasChildren>) -> PtrKey {
     Rc::as_ptr(p) as PtrKey
 }
 
@@ -50,6 +54,52 @@ impl Analyzer {
         analyzer.compute_first_sets();
         analyzer.compute_cycle_sets();
         analyzer
+    }
+
+    pub fn all_children(&self, parser: &Rc<dyn HasChildren>) -> Vec<Rc<dyn HasChildren>> {
+        let mut reachable: HashSet<PtrKey> = HashSet::new();
+        let mut result: Vec<Rc<dyn HasChildren>> = Vec::new();
+        let mut stack: Vec<Rc<dyn HasChildren>> = parser.children(); // start from children, not self
+        while let Some(current) = stack.pop() {
+            if reachable.insert(ptr(&current)) {
+                result.push(current.clone());
+                for child in current.children() {
+                    if !reachable.contains(&ptr(&child)) {
+                        stack.push(child);
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    pub fn find_path(
+        &self,
+        source: &Rc<dyn HasChildren>,
+        predicate: &impl Fn(&ParserPath) -> bool,
+    ) -> Option<ParserPath> {
+        let mut path: Option<ParserPath> = None;
+        for current in self.find_all_paths(source, predicate) {
+            if path.is_none() || current.len() < path.as_ref()?.len() {
+                path = Some(current);
+            }
+        }
+        path
+    }
+
+    pub fn find_all_paths(
+        &self,
+        source: &Rc<dyn HasChildren>,
+        predicate: &impl Fn(&ParserPath) -> bool,
+    ) -> Vec<ParserPath> {
+        assert!(
+            self.by_ptr.contains_key(&ptr(source)),
+            "source is not part of this analyzer"
+        );
+        depth_first_search(
+            &mut ParserPath::new(vec![source.clone()], Vec::new()),
+            predicate,
+        )
     }
 
     pub fn first_set(&self, p: &Rc<dyn HasChildren>) -> Vec<Rc<dyn HasChildren>> {

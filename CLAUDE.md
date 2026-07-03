@@ -853,10 +853,14 @@ hit the compiler error cold):
 
 ## What's Next
 
-**→ START HERE: port the linter.** The current head of work. Full actionable handoff (API to
-mirror, the 13 rule names, the parser-kind-identification gap to design first, and which rules are
-gated on deep-equality) is under the "THE IMMEDIATE NEXT STEP: port the linter" subsection in the
-test-parity bullet below. Everything else in this section is lower priority.
+**→ The linter port is COMPLETE** (12 of 13 dart rules implemented, `UnnecessaryResolvable`
+deliberately skipped — see the "Rule status" subsection in the test-parity bullet below for the
+full breakdown, the equality core, and the two deferred `ParserKind`/`Rc<str>` refactors). No
+single obvious "start here" now — candidate next steps: the deferred equality/message refactors,
+the `Other(Rc<dyn CustomParserKind>)` extension point for custom-parser equality, porting dart's
+`findPath`/`findAllPaths`/`allChildren` reflection *tests*, or continuing the
+`dart-petitparser-examples` grammar ports (lisp/prolog/regexp). Everything in this section is now
+roughly equal priority.
 
 - **Porting `dart-petitparser-examples`** (`/home/toddobryan/code/dart/dart-petitparser-examples`)
   into this repo, as a separate initiative from the test-parity porting below. json and math/expr
@@ -1221,22 +1225,75 @@ test-parity bullet below. Everything else in this section is lower priority.
     nullable sentinel is separate. So `choice2(char('a'), epsilon())` has a first_set with 2
     non-sentinel entries (not 1 as might be expected).
 
-  **What remains to implement (the remaining 11 rules):**
-  - **The 13 rules total** (dart class names): `CharacterRepeater`, `DuplicateParser`,
-    `LeftRecursion`, `NestedChoice`, `NullableRepeater` ✓, `OverlappingChoice`, `RepeatedChoice`,
-    `UnnecessaryFlatten`, `UnnecessaryResolvable`, `UnoptimizedFlatten`, `UnreachableChoice`,
-    `UnresolvedSettable` ✓, `UnusedResult`.
-  - **Rules that need only `children()` + kind flags (ready to implement):**
-    `LeftRecursion` (non-empty cycle_set), `NestedChoice` (is_choice child of is_choice),
-    `UnreachableChoice` (alternative after a nullable sibling), `CharacterRepeater` (is_char child
-    of is_repeating, should use CharacterRepeatingParser instead), `UnnecessaryFlatten`
-    (is_input wrapping a parser whose result is already a string/already flattened),
-    `UnoptimizedFlatten` (is_input wrapping is_repeating(is_char) — should be plus_string/etc.).
-  - **Rules that need deep structural equality (still deferred):** `DuplicateParser`,
-    `RepeatedChoice`, `OverlappingChoice`, `UnnecessaryResolvable`.
-  - **Tests for remaining rules** are already stubbed with TODO comments at the bottom of
-    `tests/linter_tests.rs` (LeftRecursion, NestedChoice, UnreachableChoice, CharacterRepeater,
-    UnnecessaryFlatten, UnoptimizedFlatten — see the comments for the specific test cases).
+  **Rule status (13 dart rules total): PORT COMPLETE — 12 implemented, 1 deliberately skipped.**
+  - **Done (12):** `NullableRepeater` ✓, `UnresolvedSettable` ✓, `LeftRecursion` ✓, `NestedChoice` ✓,
+    `UnreachableChoice` ✓, `CharacterRepeater` ✓, `UnnecessaryFlatten` ✓ (ours: `UnnecessaryInput`),
+    `UnoptimizedFlatten` ✓ (ours: `UnoptimizedInput`), `DuplicateParser` ✓, `RepeatedChoice` ✓,
+    `OverlappingChoice` ✓, `UnusedResult` ✓. All in `src/reflection/linter_rules.rs`, each with a
+    with-issue + without-issue test in `tests/linter_tests.rs` (63 tests).
+  - **Equality core (landed):** property-carrying `#[non_exhaustive] enum ParserKind`
+    (`src/core/kind.rs`) returned by `HasChildren::kind()`, deriving `PartialEq` with a `NeverEq`
+    marker *struct* (`impl PartialEq { fn eq → false }`) for opaque closure/value variants
+    (`Map`/`Constant`/`Epsilon`/`FlatMap`/`Continuation`/`Success`/`Other`) and `*const ()`/fn-ptr
+    identity tokens for reference-equality variants (`PredicateChar`/`Predicate`/`OnlyIf`/
+    `CharacterRepeating`). `structural_eq` + `parsers_equal` (fresh-`seen` wrapper) +
+    `is_parser_iterable_equal` in `src/reflection/equality.rs`, porting dart's `isEqualTo` with the
+    left-only `ptr()` cycle guard. `MapParser` (bare generic `f: F`) is the sole conservative-`false`
+    case; `PredicateChar`/`Predicate`/`only_if` get faithful reference equality via `Rc::ptr_eq`/
+    fn-ptr. `ParserKind::Other` is the catch-all for custom `HasChildren` implementors
+    (`TabularDefinition`); the `impl HasChildren for Rc<P>` blanket delegates `kind()` through
+    `(**self)`, and the `#[grammar]` macro emits `kind()` delegating to `self.start.kind()`.
+  - **`UnusedResult` (landed):** uses `Analyzer::all_children(&p)` (transitive-children DFS,
+    self-included only if cyclically reachable — matches dart's test matrix) + `is_result_producing`
+    (`is_constant_parser`/`is_input`/`is_map_parser`/`is_elements_at_parser`/`is_pick_parser`/
+    `is_token_parser`/`is_only_if`; `cast`/`castList` absent, all maps result-producing) + the full
+    `ParserPath`/`find_path`/`find_all_paths`/`depth_first_search` machinery
+    (`src/reflection/path.rs` + `analyzer.rs`) — the `sync*` generator ported as recursion returning
+    a `Vec<ParserPath>` with `push`/`pop` backtracking and per-path (not global) `ptr` cycle
+    avoidance. (The findPath machinery was built in full rather than the originally-planned
+    simplified message.)
+  - **`UnnecessaryResolvable`: DELIBERATELY SKIPPED** (like `cast`/`castList`). It's just
+    `is_settable()` (no equality needed), but it flags every `ResolvableParser` because dart expects
+    you to strip them via `resolve(parser)` before parsing. **Our architecture makes every
+    `#[grammar]` rule a `SettableParser` that is load-bearing at parse time** — we have no
+    `resolve()` pass and the settables *are* the recursion mechanism, so a faithful port would flag
+    every rule in every grammar as a warning. We consciously accepted the "must resolve every
+    parser" inefficiency when we chose the all-`Settable` design, so this lint doesn't apply to us.
+    Not implemented; no test.
+  - **Complete variant list for `ParserKind` (32 variants):** every concrete `HasChildren` impl
+    needs a `kind()`. `SeqN`→one `Sequence`, `ChoiceN`→one `Choice { joiner }`; the three repeaters
+    (`Possessive`/`Greedy`/`Lazy`) stay distinct; `SettableParser`+`SettableParserRef`→one `Settable`
+    (judgment call — merge unless you want owner vs weak-ref to compare unequal); `UndefinedParser`
+    is its own `Undefined { message }`. Data variants: `Char { kind: CharKind, message }`,
+    `CharRepeating { test: *const (), message, min, max }`, `Choice { joiner: FailureJoiner }` (fn-ptr,
+    not generic → no erasure), `ElementsAt { indexes: Vec<i32> }`, `End { message }`, `Failure { message }`,
+    `Input { message }`, `Labeled { label }`, `Not { message }`, `Pick { index: i32 }`,
+    `Predicate { predicate: *const (), length, message }`, `PredicateChar { test: *const (), message }`,
+    `Regex { pattern: String, message }` (via `regex.as_str()` — `Regex` isn't `PartialEq`),
+    `{Possessive,Greedy,Lazy}Repeating { min, max }`, `SeparatedRepeating { min, max, trailing }`
+    (`Trailing` derives `PartialEq`). Reference (fn-ptr erased to `*const ()`): `OnlyIf { predicate,
+    factory }`. Opaque (`NeverEq` marker, always compare unequal): `Constant`, `Continuation`,
+    `Epsilon`, `FlatMap`, `Map`, `Success`. Unit: `And`, `Newline`, `Position`, `Sequence`, `Skip`,
+    `Settable`, `Token`. **NOTE `SkipParser` and `SeparatedListRepeatingParser` are easy to miss** —
+    their `impl … HasChildren` wraps the where-clause so `for TypeName` is on the next line, which a
+    `grep "HasChildren for"` skips right past.
+  - **Deferred refactor 1 — make `ParserKind` borrow (`ParserKind<'_>`), not own.** Currently
+    `kind(&self) -> ParserKind` clones every message `String` (and `CharKind`, `Vec<i32>`, …) into an
+    owned variant. Change to `fn kind(&self) -> ParserKind<'_>` with data variants holding `&'a str` /
+    `&'a CharKind` / `&'a [i32]` borrowed from `&self` (`message: self.message.as_deref()`), so `kind()`
+    allocates nothing. Sound because a `ParserKind` is always compare-then-discard: `structural_eq`
+    builds both kinds, compares while both parsers are alive (we hold the `Rc`s), and drops them — no
+    kind is ever stored. Only cost is a lifetime param on the enum; `*const ()`/unit variants are
+    unaffected. Parked mid-implementation (owned+cloning works for now); revisit for the alloc win.
+  - **Deferred refactor 2 — `Option<Rc<str>>` for message storage** (note: `Rc<str>`, not
+    `Rc<String>`/`Rc<Option<String>>` — `Rc<str>` is the single-indirection form; `Option<Rc<str>>`
+    keeps `None` free and shares the string). Every parser's `message: Option<String>`/`String` →
+    `Option<Rc<str>>`/`Rc<str>`, making all message clones refcount bumps. Helps `kind()` clones *and*
+    — the real prize — the **parse-time failure path** (`context.failure(self.message.clone())`
+    allocates a fresh `String` on every failure, which bites in backtracking-heavy grammars). Broad
+    mechanical change (every struct, constructor, `context.failure()` signature, `message_for`/
+    `input_message`), orthogonal to the linter — do it as its own benchmark-driven pass. If done, an
+    owned `ParserKind` becomes cheap too, softening the need for deferred refactor 1.
 
   The kind-flag approach (methods on `HasChildren`) is fully working. The 13 dart classes map to
   `HasChildren` method overrides: `is_repeating`/`is_separated_repeating`/`is_possessive_repeating`/
@@ -1249,6 +1306,53 @@ test-parity bullet below. Everything else in this section is lower priority.
   dart's `expectParserInvariants` assertions and the equality-dependent linter rules above. Regex
   char parsers are no longer in this deferred list — see "Ported dart's regex-backed `PatternParser`"
   above.
+
+  **Parked (prototyped, reverted): `FnWithText` — capture a mapping function's source text for
+  `Debug` output.** The pain point: a `MapParser` (and any function-carrying parser) prints
+  `f: "<mapping function>"`, so you can't tell which one you're looking at or what it does — and
+  since we deliberately don't implement `Display` for parsers, `Debug` is the only view. Goal: let
+  a parser print the actual code of its closure (e.g. `"|c| c.to_digit(10).unwrap() + 1"`) or a
+  named function's name (`"add_one"`). Prototyped on `MapParser` only, confirmed working, then
+  reverted to keep the linter work clean — captured here so it can be rebuilt.
+  - **The appealing-but-impossible API: `p.map(func!(|x| ...))`.** The idea was a wrapper struct
+    `FnWithText<F> { f: F, text: Option<&'static str> }` where `func!(closure)` fills `text` via
+    `stringify!`, plus a bare closure coercing in through `impl Into<FnWithText<F>>` so both forms
+    work. It fails on stable for two independent reasons: (1) you **cannot `impl Fn` on
+    `FnWithText`** — that needs the unstable `fn_traits`/`unboxed_closures`, so the wrapper can't
+    be a transparent drop-in callable (not actually needed, since combinators own their call site
+    and just call `(self.f.f)(x)`); and (2) — the real killer — **`impl Into<FnWithText<F>>`
+    breaks closure-parameter inference.** Routing the closure through an `Into` layer means the
+    `where F: Fn(T) -> U` bound no longer flows back to pin the closure's parameter type when the
+    literal is checked, so `.map(|x| ...)` fails with `E0282` (type annotations needed) on real
+    call sites like `rep_sep`'s `.map(|sl| sl.elements)`. Not fixable by rearranging bounds — a
+    closure literal needs its *expected type* to be directly `Fn`-shaped, and `impl Into<...>`
+    isn't. Forcing `.map(|x: T| ...)` annotations everywhere is a non-starter.
+  - **The form that works: a `map!` macro + a text-taking method.** Keep `.map(f)` exactly as-is
+    (bare `f: F`, inference intact), add `map_with_text(f, text: Option<&'static str>)`, and a
+    `map!(p, |x| ...)` macro expanding to `p.map_with_text(|x| ..., Some(stringify!(|x| ...)))` —
+    the closure stays a *direct* argument to a method whose parameter is `F: Fn(T) -> U`, so
+    inference works and `stringify!` runs on the same tokens. `MapParser` stores
+    `f: FnWithText<F>`; `Debug` prints `self.f.text.unwrap_or("<function>")`. Verified output:
+    plain `.map` → `f: "<function>"`; `map!` closure → `f: "|c| c.to_digit(10).unwrap() + 1"`
+    (`stringify!` kept it nearly verbatim, not heavily re-spaced); `map!` named fn → `f: "add_one"`.
+    Full suite + clippy stayed green. The tradeoff: the nice-print call site is `map!(p, f)`, not
+    `p.map(func!(f))` — same info, one macro at the front instead of wrapping the argument.
+  - **User's stated preference for if/when we return to this:** not opposed to *forcing* a
+    `func!(...)`-style wrapper at **every** site a parser takes a function, accepting the churn,
+    since it improves Debug cheaply. That means changing every bare `Fn` field in the parser
+    structs (`MapParser.f`, `OnlyIfParser.predicate/factory`, `FlatMapParser`, `ContinuationParser`,
+    the `mapN`/`seq! =>` expansions, …) to `FnWithText`. **Open question to test first if we go
+    this route:** whether a single macro-only path (no bare-closure path, method takes
+    `FnWithText<F>` directly) preserves inference — the per-combinator `map!`→direct-arg form
+    *definitely* does (proven above); a unified `func!`-wrapper-into-a-`FnWithText`-taking-method
+    has the same nested-closure-in-a-struct-literal inference risk as the `Into` form and must be
+    verified before committing to the sweep.
+  - **Keep this off the equality path** (same trap as the `#[track_caller]` idea): `text` is not
+    identity — two `map!(p, |x| x+1)` at different sites have identical text but are different
+    closures, so text-equality would false-positive `RepeatedChoice`. `MapParser` equality stays
+    conservative-`false` regardless; `FnWithText` is purely for printing. (An alternative discussed
+    and passed over: `#[track_caller]` capturing `file:line:col` instead of text — no macro, no
+    call-site changes, but gives a location rather than the code.)
 
   **Deferred: cycle-safe recursive `Debug` for `SettableParser`/`SettableParserRef`.** Surfaced
   while writing `LeftRecursion`'s message (which formats each `analyzer.cycle_set(parser)` member

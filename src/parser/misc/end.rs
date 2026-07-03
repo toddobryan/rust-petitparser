@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::rc::Rc;
@@ -21,6 +22,12 @@ pub struct EndOfInputParser {
 impl HasChildren for EndOfInputParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::EndOfInput {
+            message: self.message.clone(),
+        }
     }
 }
 

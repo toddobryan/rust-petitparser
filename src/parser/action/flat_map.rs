@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::{NeverEq, ParserKind};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -18,6 +19,10 @@ pub struct FlatMapParser<P2, T, T2> {
 impl<P2: Debug, T: Debug + 'static, T2: Debug> HasChildren for FlatMapParser<P2, T, T2> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::FlatMap(NeverEq)
     }
 }
 

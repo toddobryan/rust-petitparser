@@ -1,3 +1,4 @@
+use crate::core::kind::{NeverEq, ParserKind};
 use crate::core::parser::HasChildren;
 use crate::prelude::{Context, ParseResult, Parser};
 use std::fmt::Debug;
@@ -42,6 +43,10 @@ impl<T, T2, H> Debug for ContinuationParser<T, T2, H> {
 impl<T: 'static, T2, H> HasChildren for ContinuationParser<T, T2, H> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Continuation(NeverEq)
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::{ParserKind, PtrKey};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::Failure;
 use crate::core::result::ParseResult;
@@ -26,6 +27,10 @@ macro_rules! choice_impl {
         impl<T: Debug + 'static> HasChildren for $name<T> {
             fn children(&self) -> Vec<Rc<dyn HasChildren>> {
                 vec![$(self.$value.clone()),+]
+            }
+
+            fn kind(&self) -> ParserKind {
+                ParserKind::Choice { joiner: self.joiner as PtrKey }
             }
 
             fn is_choice(&self) -> bool {

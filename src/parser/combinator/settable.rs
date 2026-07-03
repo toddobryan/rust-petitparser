@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::cell::RefCell;
@@ -36,6 +37,12 @@ impl<T> Clone for UndefinedParser<T> {
 impl<T> HasChildren for UndefinedParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Undefined {
+            message: self.message.clone(),
+        }
     }
 
     fn is_undefined(&self) -> bool {
@@ -97,6 +104,10 @@ impl<T: 'static> HasChildren for SettableParser<T> {
         vec![self.delegate.borrow().clone()]
     }
 
+    fn kind(&self) -> ParserKind {
+        ParserKind::Settable
+    }
+
     fn is_settable(&self) -> bool {
         true
     }
@@ -149,6 +160,10 @@ impl<T: 'static> HasChildren for SettableParserRef<T> {
                 .borrow()
                 .clone(),
         ]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Settable
     }
 }
 

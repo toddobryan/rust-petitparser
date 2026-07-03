@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::{ParserKind, PtrKey};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult, Success};
 use std::fmt::Debug;
@@ -37,6 +38,13 @@ where
 impl<T: Debug + 'static> HasChildren for OnlyIfParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::OnlyIf {
+            predicate: self.predicate as PtrKey,
+            factory: self.factory.map(|f| f as PtrKey),
+        }
     }
 
     fn is_only_if(&self) -> bool {

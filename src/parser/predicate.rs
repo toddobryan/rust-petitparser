@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::{ParserKind, PtrKey};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{Failure, ParseResult};
 use std::fmt::Debug;
@@ -61,6 +62,14 @@ impl PredicateParser {
 impl HasChildren for PredicateParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Predicate {
+            predicate: Rc::as_ptr(&self.predicate) as PtrKey,
+            length: self.length,
+            message: self.message.clone(),
+        }
     }
 
     fn is_string_predicate(&self) -> bool {

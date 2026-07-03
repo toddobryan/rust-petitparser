@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::{ParseResult, Success};
 use crate::core::token::Token;
@@ -13,6 +14,10 @@ pub struct TokenParser<T> {
 impl<T: Debug + 'static> HasChildren for TokenParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.parser.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Token
     }
 
     fn is_token_parser(&self) -> bool {

@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::{Context, HasContext},
+    kind::{ParserKind, PtrKey},
     parser::{HasChildren, Parser},
     result::ParseResult,
 };
@@ -44,6 +45,15 @@ impl Debug for CharacterRepeatingParser {
 impl HasChildren for CharacterRepeatingParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::CharacterRepeating {
+            test: Rc::as_ptr(&self.test) as PtrKey,
+            message: self.message.clone(),
+            min: self.min,
+            max: self.max,
+        }
     }
 
     fn is_char_repeating(&self) -> bool {

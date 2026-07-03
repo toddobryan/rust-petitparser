@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::{NeverEq, ParserKind};
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -12,6 +13,10 @@ pub struct EpsilonParser<T: Clone + Debug> {
 impl<T: Clone + Debug> HasChildren for EpsilonParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Epsilon(NeverEq)
     }
 
     fn is_directly_nullable(&self) -> bool {

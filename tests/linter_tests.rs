@@ -598,8 +598,109 @@ fn unoptimized_input_flags_flatten_with_no_message() {
 
 #[gtest]
 fn unoptimized_input_no_issue_when_message_provided() {
-    let root: Rc<dyn HasChildren> = Rc::new(any().input_with_message("anything really".to_string()));
+    let root: Rc<dyn HasChildren> =
+        Rc::new(any().input_with_message("anything really".to_string()));
     assert_no_issues(root, &[&UnoptimizedInput]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: DuplicateParser
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn duplicate_parser_flags_two_structurally_equal_children() {
+    // seq2(digit(), digit()): the two digit() leaves are structurally equal (same CharKind,
+    // same message), so the first one is flagged. Only the first occurrence reports (dart's
+    // `duplicates.first == parser` guard), so exactly one issue.
+    let root: Rc<dyn HasChildren> = Rc::new(seq2(digit(), digit()));
+    assert_one_issue(root, &[&DuplicateParser], "Duplicate parser");
+}
+
+#[gtest]
+fn duplicate_parser_no_issue_when_children_differ() {
+    // Distinct messages make the two digits structurally unequal (message is part of the
+    // Char kind), so neither is a duplicate.
+    let root: Rc<dyn HasChildren> = Rc::new(seq2(
+        digit().with_message("first"),
+        digit().with_message("second"),
+    ));
+    assert_no_issues(root, &[&DuplicateParser]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: RepeatedChoice
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn repeated_choice_flags_identical_alternatives() {
+    // [1, 2, 3, 2, 4]: children[1] and children[3] are both char('2') → structurally equal,
+    // so the second is unreachable. One issue on the choice.
+    let root: Rc<dyn HasChildren> = Rc::new(choice5(
+        char('1'),
+        char('2'),
+        char('3'),
+        char('2'),
+        char('4'),
+    ));
+    assert_one_issue(root, &[&RepeatedChoice], "Repeated choice");
+}
+
+#[gtest]
+fn repeated_choice_no_issue_when_all_alternatives_distinct() {
+    let root: Rc<dyn HasChildren> = Rc::new(choice4(char('1'), char('2'), char('3'), char('4')));
+    assert_no_issues(root, &[&RepeatedChoice]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: OverlappingChoice
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn overlapping_choice_flags_alternatives_with_equal_first_sets() {
+    // dart: [char('1'), char('2') & char('a'), char('2') & char('b'), char('3')].toChoiceParser()
+    // children[1] and children[2] are distinct parsers, but both have first-set {char('2')} --
+    // so they *overlap* even though they aren't identical (that's what sets this apart from
+    // RepeatedChoice). One issue on the choice.
+    //
+    // .constant(()) unifies the mixed value types (char vs (char, char)) into one Parser<()>;
+    // it's transparent to first-sets (first_set(x.constant(())) == first_set(x)), so the
+    // overlap is detected exactly as in dart.
+    let root: Rc<dyn HasChildren> = Rc::new(choice4(
+        char('1').constant(()),
+        seq2(char('2'), char('a')).constant(()),
+        seq2(char('2'), char('b')).constant(()),
+        char('3').constant(()),
+    ));
+    assert_one_issue(root, &[&OverlappingChoice], "Overlapping choice");
+}
+
+#[gtest]
+fn overlapping_choice_no_issue_when_first_sets_disjoint() {
+    // [char('1'), char('2'), char('3')] -- first-sets {1}, {2}, {3} are pairwise disjoint.
+    let root: Rc<dyn HasChildren> = Rc::new(choice3(char('1'), char('2'), char('3')));
+    assert_no_issues(root, &[&OverlappingChoice]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: UnusedResult
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn unused_result_flags_flatten_over_a_result_producing_child() {
+    // dart: digit().map(int.parse).star().flatten()
+    // The .map(...) is a result-producing parser buried under star().input(); the flatten
+    // discards its result and returns the consumed input instead → one issue on the flatten.
+    let root: Rc<dyn HasChildren> =
+        Rc::new(digit().map(|c| c.to_digit(10).unwrap()).star().input());
+    assert_one_issue(root, &[&UnusedResult], "Unused result");
+}
+
+#[gtest]
+fn unused_result_no_issue_without_a_result_producing_child() {
+    // digit().star().flatten() -- digit (char) and star (repeating) are not result-producing,
+    // so the flatten discards nothing meaningful.
+    let root: Rc<dyn HasChildren> = Rc::new(digit().star().input());
+    assert_no_issues(root, &[&UnusedResult]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

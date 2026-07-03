@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::core::{
     context::Context,
+    kind::ParserKind,
     parser::{HasChildren, Parser},
     result::{ParseResult, Success},
 };
@@ -19,6 +20,14 @@ pub struct PickParser<I, T> {
 impl<I: Debug + 'static, T: Debug> HasChildren for PickParser<I, T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Pick { index: self.index }
+    }
+
+    fn is_pick_parser(&self) -> bool {
+        true
     }
 }
 

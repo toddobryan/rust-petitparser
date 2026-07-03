@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::rc::Rc;
@@ -11,6 +12,10 @@ pub struct NewlineParser {
 impl HasChildren for NewlineParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Newline
     }
 
     fn is_newline(&self) -> bool {

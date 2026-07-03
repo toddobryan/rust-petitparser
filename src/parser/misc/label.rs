@@ -1,4 +1,5 @@
 use crate::core::context::Context;
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -15,6 +16,12 @@ pub struct LabeledParser<T> {
 impl<T: Clone + Debug + 'static> HasChildren for LabeledParser<T> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Labeled {
+            label: self.label.clone(),
+        }
     }
 }
 

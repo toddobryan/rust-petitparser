@@ -20,6 +20,11 @@ impl HasChildren for TabularDefinition {
             self.newline.clone(),
         ]
     }
+
+    // Bespoke parser with no dedicated ParserKind variant → the opaque catch-all.
+    fn kind(&self) -> ParserKind {
+        ParserKind::Other(NeverEq)
+    }
 }
 
 impl Parser<Vec<Vec<String>>> for TabularDefinition {

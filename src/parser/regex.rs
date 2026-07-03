@@ -2,6 +2,7 @@ use regex::{Captures, Match, Regex};
 
 use crate::core::{
     context::{Context, HasContext},
+    kind::ParserKind,
     parser::{HasChildren, Parser},
     result::{Failure, ParseResult, Success},
 };
@@ -43,6 +44,13 @@ impl RegexParser {
 impl HasChildren for RegexParser {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Regex {
+            pattern: self.regex.to_string(),
+            message: self.message.clone(),
+        }
     }
 }
 

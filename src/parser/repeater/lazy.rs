@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -18,6 +19,13 @@ pub struct LazyRepeatingParser<T, TC> {
 impl<T: Debug + 'static, TC: Debug + 'static> HasChildren for LazyRepeatingParser<T, TC> {
     fn children(&self) -> Vec<Rc<dyn HasChildren>> {
         vec![self.delegate.clone(), self.limit.clone()]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::LazyRepeating {
+            min: self.min,
+            max: self.max,
+        }
     }
 
     fn is_repeating(&self) -> bool {

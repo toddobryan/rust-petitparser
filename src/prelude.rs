@@ -1,4 +1,5 @@
 pub use crate::core::context::{Context, HasContext};
+pub use crate::core::kind::{NeverEq, ParserKind};
 pub use crate::core::parser::{HasChildren, Parser};
 pub use crate::core::result::{Failure, ParseResult, Success};
 pub use crate::core::token::{TextLocation, Token, line_and_column_of, position_string};

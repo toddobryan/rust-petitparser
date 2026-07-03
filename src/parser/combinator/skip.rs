@@ -1,4 +1,5 @@
 use crate::core::context::{Context, HasContext};
+use crate::core::kind::ParserKind;
 use crate::core::parser::{HasChildren, Parser};
 use crate::core::result::ParseResult;
 use std::fmt::Debug;
@@ -24,6 +25,10 @@ impl<Aft: Debug + 'static, Bef: Debug + 'static, T: Debug + 'static> HasChildren
             self.delegate.clone(),
             self.after.clone(),
         ]
+    }
+
+    fn kind(&self) -> ParserKind {
+        ParserKind::Skip
     }
 }
 
