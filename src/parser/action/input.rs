@@ -5,6 +5,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+/// Collapses the delegate's matched span into the underlying `String`, discarding its value.
+/// This is dart-petitparser's `FlattenParser` (constructed via `.flatten()`) — renamed here
+/// since "flatten" reads as collapsing a nested structure, whereas this returns the raw
+/// consumed input text. See [`crate::parser::ext::ParserExt::input`] for the constructor, and
+/// its `.flatten()`/`.flatten_with_message()` aliases for anyone coming from dart.
 #[derive(Clone, Debug)]
 pub struct InputParser<T: Debug> {
     pub delegate: Rc<dyn Parser<T>>,

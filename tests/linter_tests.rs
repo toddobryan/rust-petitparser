@@ -495,6 +495,114 @@ fn left_recursion_no_issue_for_non_recursive_parser() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Linter: NestedChoice
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn nested_choice_flags_choice_nested_directly_inside_another() {
+    // [char('1'), [char('2'), char('3')].toChoiceParser(), char('4')].toChoiceParser()
+    let root: Rc<dyn HasChildren> =
+        Rc::new(choice3(char('1'), choice2(char('2'), char('3')), char('4')));
+    assert_one_issue(root, &[&NestedChoice], "Nested choice");
+}
+
+#[gtest]
+fn nested_choice_no_issue_when_nested_choice_is_flattened() {
+    // Same shape, but the nested choice is wrapped in .input() (dart's .flatten()) first, so
+    // it's no longer directly is_choice() from its parent's perspective. .constant(()) unifies
+    // the three choice arms to one type -- dart's dynamically-typed toChoiceParser() doesn't
+    // need this, since it freely mixes char and String results.
+    let root: Rc<dyn HasChildren> = Rc::new(choice3(
+        char('1').constant(()),
+        choice2(char('2'), char('3')).input().constant(()),
+        char('4').constant(()),
+    ));
+    assert_no_issues(root, &[&NestedChoice]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: UnreachableChoice
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn unreachable_choice_flags_alternative_after_nullable() {
+    // [char('1'), char('2'), epsilon(), char('3')].toChoiceParser() -- epsilon() at index 2
+    // means char('3') can never be reached. .constant(()) unifies char/epsilon's value types.
+    let root: Rc<dyn HasChildren> = Rc::new(choice4(
+        char('1').constant(()),
+        char('2').constant(()),
+        epsilon(),
+        char('3').constant(()),
+    ));
+    assert_one_issue(root, &[&UnreachableChoice], "Unreachable choice");
+}
+
+#[gtest]
+fn unreachable_choice_no_issue_without_nullable_alternative() {
+    let root: Rc<dyn HasChildren> = Rc::new(choice3(char('1'), char('2'), char('3')));
+    assert_no_issues(root, &[&UnreachableChoice]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: CharacterRepeater
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn character_repeater_flags_flattened_char_parser_star() {
+    // char('a').star().flatten()
+    let root: Rc<dyn HasChildren> = Rc::new(char('a').star().input());
+    assert_one_issue(root, &[&CharacterRepeater], "Character repeater");
+}
+
+#[gtest]
+fn character_repeater_flags_flattened_any_parser_plus() {
+    // any().plus().flatten()
+    let root: Rc<dyn HasChildren> = Rc::new(any().plus().input());
+    assert_one_issue(root, &[&CharacterRepeater], "Character repeater");
+}
+
+#[gtest]
+fn character_repeater_no_issue_for_tokenized_repeater() {
+    // char('a').plus().token() -- token(), not flatten()/input(), so is_input() is false
+    let root: Rc<dyn HasChildren> = Rc::new(char('a').plus().token());
+    assert_no_issues(root, &[&CharacterRepeater]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: UnnecessaryInput (dart's UnnecessaryFlatten)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn unnecessary_input_flags_char_delegate_with_no_message() {
+    // any().flatten() -- any() is already char-shaped, no message to enable the fast path
+    let root: Rc<dyn HasChildren> = Rc::new(any().input());
+    assert_one_issue(root, &[&UnnecessaryInput], "Unnecessary input");
+}
+
+#[gtest]
+fn unnecessary_input_no_issue_when_delegate_is_not_string_shaped() {
+    // any().optional().flatten() -- opt() isn't one of the five string-shaped delegate kinds
+    let root: Rc<dyn HasChildren> = Rc::new(any().opt().input());
+    assert_no_issues(root, &[&UnnecessaryInput]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linter: UnoptimizedInput (dart's UnoptimizedFlatten)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn unoptimized_input_flags_flatten_with_no_message() {
+    let root: Rc<dyn HasChildren> = Rc::new(any().input());
+    assert_one_issue(root, &[&UnoptimizedInput], "Unoptimized input");
+}
+
+#[gtest]
+fn unoptimized_input_no_issue_when_message_provided() {
+    let root: Rc<dyn HasChildren> = Rc::new(any().input_with_message("anything really".to_string()));
+    assert_no_issues(root, &[&UnoptimizedInput]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ALL_LINTER_RULES smoke tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -515,27 +623,3 @@ fn all_rules_undefined_settable_found() {
         "expected an 'Unresolved settable' issue"
     );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TODO: add tests for these rules once the rule structs are implemented
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// NestedChoice
-//   with-issue:    choice2(choice2(char('a'), char('b')), char('c'))
-//   without-issue: choice2(char('a'), char('b'))
-//
-// UnreachableChoice
-//   with-issue:    choice2(epsilon(), char('a'))  — char('a') unreachable after nullable
-//   without-issue: choice2(char('a'), char('b'))
-//
-// CharacterRepeater
-//   with-issue:    any().plus()     — should be any().plus_string()
-//   without-issue: any().plus_string()
-//
-// UnnecessaryFlatten
-//   with-issue:    string("abc").input()
-//   without-issue: char('a').star().input()
-//
-// UnoptimizedFlatten
-//   with-issue:    any().plus().input()  — use any().plus_string() instead
-//   without-issue: any().plus_string()

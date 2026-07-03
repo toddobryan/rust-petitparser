@@ -313,6 +313,8 @@ where
         }
     }
 
+    /// dart-petitparser calls this `.flatten()`; see [`flatten`](ParserExt::flatten) for an
+    /// alias under that name.
     fn input(self) -> impl Parser<String> {
         InputParser {
             delegate: Rc::new(self),
@@ -321,12 +323,26 @@ where
         }
     }
 
+    /// dart-petitparser calls this `.flatten(message: ...)`; see
+    /// [`flatten_with_message`](ParserExt::flatten_with_message) for an alias under that name.
     fn input_with_message(self, message: String) -> impl Parser<String> {
         InputParser {
             delegate: Rc::new(self),
             message: Some(message),
             delegate_type: PhantomData,
         }
+    }
+
+    /// Alias for [`input`](ParserExt::input), matching dart-petitparser's name for programmers
+    /// coming from there.
+    fn flatten(self) -> impl Parser<String> {
+        self.input()
+    }
+
+    /// Alias for [`input_with_message`](ParserExt::input_with_message), matching
+    /// dart-petitparser's name for programmers coming from there.
+    fn flatten_with_message(self, message: String) -> impl Parser<String> {
+        self.input_with_message(message)
     }
 
     fn only_if(self, pred: fn(&T) -> bool) -> OnlyIfParser<T> {
