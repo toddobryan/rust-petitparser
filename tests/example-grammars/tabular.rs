@@ -21,9 +21,23 @@ impl HasChildren for TabularDefinition {
         ]
     }
 
-    // Bespoke parser with no dedicated ParserKind<'_> variant → the opaque catch-all.
+    // Bespoke parser with no dedicated ParserKind variant → the custom catch-all. Its identity is
+    // entirely its four config sub-parsers (which structural_eq compares as children), so its own
+    // CustomParserKind is just a type check: two TabularDefinitions are equal iff their children
+    // are. This opts TabularDefinition into the linter's equality-based rules.
     fn kind(&self) -> ParserKind<'_> {
-        ParserKind::Other(NeverEq)
+        ParserKind::Other(Rc::new(TabularKind))
+    }
+}
+
+#[derive(Debug)]
+struct TabularKind;
+
+impl CustomParserKind for TabularKind {
+    fn eq_custom(&self, other: &dyn CustomParserKind) -> bool {
+        (other as &dyn std::any::Any)
+            .downcast_ref::<TabularKind>()
+            .is_some()
     }
 }
 

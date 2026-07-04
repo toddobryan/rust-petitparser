@@ -853,15 +853,22 @@ hit the compiler error cold):
 
 ## What's Next
 
-**→ The linter port is COMPLETE** (12 of 13 dart rules implemented, `UnnecessaryResolvable`
-deliberately skipped — see the "Rule status" subsection in the test-parity bullet below for the
-full breakdown, the equality core, and the two deferred `ParserKind`/`Rc<str>` refactors). No
-single obvious "start here" now — candidate next steps: the deferred equality/message refactors,
-the `Other(Rc<dyn CustomParserKind>)` extension point for custom-parser equality, porting dart's
-`findPath`/`findAllPaths`/`allChildren` reflection *tests*, the debug tools
-(`trace`/`progress`/`profile`, gated on porting `transformParser`+`copy` first), or continuing the
-`dart-petitparser-examples` grammar ports (lisp/prolog/regexp). Everything in this section is now
-roughly equal priority.
+**→ The linter port is COMPLETE**, and so is the reflection layer it sits on. Done as of this
+writing: all 12 implemented rules + the equality core; deferred refactor 1 (borrow `ParserKind`);
+deferred refactor 3 (collapse the `is_*` flags into `kind()`); the `allChildren`/`findPath`
+reflection *tests* (`tests/reflection_tests.rs`); and the `Other(Rc<dyn CustomParserKind>)`
+custom-parser-equality extension point (see below). Deferred refactor 2 (`Rc<str>` messages) is
+resolved as **won't-do** (see its note — the motivation is already covered by whole-parser `Rc`;
+measure before revisiting). What actually remains, by size:
+- **Small / well-scoped:** the Rust-specific `s.set(s.clone())`-vs-`.borrow()` leak lint; cycle-safe
+  recursive `Debug` for `SettableParser`/`SettableParserRef`; the parked `FnWithText`/`func!` Debug
+  improvement.
+- **Big lever:** `transformParser` + `copy()` (graph rewrite/copy), which unlocks the debug tools
+  (`trace`/`progress`/`profile`) *and* `optimize`/`replace`/`resolve` + `expectParserInvariants`.
+- **Separate initiatives:** the `dart-petitparser-examples` grammars (lisp/prolog interpreters,
+  regexp engine); a benchmark-driven look at failure-path perf (lazy messages, not `Rc<str>`).
+
+See the dedicated bullets below for each. Roughly equal priority within a size band.
 
 - **Debug tools (`trace`/`progress`/`profile`) — not ported, gated on `transformParser`+`copy`.**
   Dart's `lib/debug.dart` exposes three parser-instrumentation tools (`lib/src/debug/{trace,
@@ -1274,9 +1281,17 @@ roughly equal priority.
     `is_parser_iterable_equal` in `src/reflection/equality.rs`, porting dart's `isEqualTo` with the
     left-only `ptr()` cycle guard. `MapParser` (bare generic `f: F`) is the sole conservative-`false`
     case; `PredicateChar`/`Predicate`/`only_if` get faithful reference equality via `Rc::ptr_eq`/
-    fn-ptr. `ParserKind::Other` is the catch-all for custom `HasChildren` implementors
-    (`TabularDefinition`); the `impl HasChildren for Rc<P>` blanket delegates `kind()` through
-    `(**self)`, and the `#[grammar]` macro emits `kind()` delegating to `self.start.kind()`.
+    fn-ptr. `ParserKind::Other(Rc<dyn CustomParserKind>)` is the catch-all for custom `HasChildren`
+    implementors (`TabularDefinition`): the payload is a `CustomParserKind` trait object (`Any +
+    Debug`, with `impl PartialEq for dyn CustomParserKind` delegating to `eq_custom`) that lets a
+    downstream parser opt into the equality-based lints by defining how two of its kind compare —
+    typically a type check (`(other as &dyn Any).downcast_ref::<MyKind>().is_some()`), since children
+    are compared by `structural_eq`'s recursion. `AlwaysDistinct` is the ready-made opt-out (never
+    equal). This is the *one* place `Any`/downcast lives — isolated to the external-parser extension
+    point, keeping the built-in core downcast-free. Tested in `src/core/kind.rs`'s `#[cfg(test)]
+    mod`; `TabularDefinition` uses a real `TabularKind` (type check) as the in-repo example. The
+    `impl HasChildren for Rc<P>` blanket delegates `kind()` through `(**self)`, and the `#[grammar]`
+    macro emits `kind()` delegating to `self.start.kind()`.
   - **`UnusedResult` (landed):** uses `Analyzer::all_children(&p)` (transitive-children DFS,
     self-included only if cyclically reachable — matches dart's test matrix) + `is_result_producing`
     (`is_constant_parser`/`is_input`/`is_map_parser`/`is_elements_at_parser`/`is_pick_parser`/
