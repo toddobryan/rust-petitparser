@@ -856,17 +856,19 @@ hit the compiler error cold):
 **→ The linter port is COMPLETE**, and so is the reflection layer it sits on. Done as of this
 writing: all 12 implemented rules + the equality core; deferred refactor 1 (borrow `ParserKind`);
 deferred refactor 3 (collapse the `is_*` flags into `kind()`); the `allChildren`/`findPath`
-reflection *tests* (`tests/reflection_tests.rs`); and the `Other(Rc<dyn CustomParserKind>)`
-custom-parser-equality extension point (see below). Deferred refactor 2 (`Rc<str>` messages) is
-resolved as **won't-do** (see its note — the motivation is already covered by whole-parser `Rc`;
-measure before revisiting). What actually remains, by size:
-- **Small / well-scoped:** the Rust-specific `s.set(s.clone())`-vs-`.borrow()` leak lint; cycle-safe
-  recursive `Debug` for `SettableParser`/`SettableParserRef`; the parked `FnWithText`/`func!` Debug
-  improvement.
+reflection *tests* (`tests/reflection_tests.rs`); the `Other(Rc<dyn CustomParserKind>)`
+custom-parser-equality extension point; the Rust-specific `StrongSettableCycle` leak lint
+(`s.set(s.clone())` detection); and cycle-safe recursive `Debug` for the settable parsers. Deferred
+refactor 2 (`Rc<str>` messages) is resolved as **won't-do** (see its note — the motivation is
+already covered by whole-parser `Rc`; measure before revisiting). What actually remains, by size:
+- **Small / well-scoped:** the `FnWithText`/`func!` Debug improvement — DECIDED (design A, force
+  `func!` everywhere; inference resolved as feasible) but DEFERRED as its own large mechanical
+  rewrite (see its note).
 - **Big lever:** `transformParser` + `copy()` (graph rewrite/copy), which unlocks the debug tools
   (`trace`/`progress`/`profile`) *and* `optimize`/`replace`/`resolve` + `expectParserInvariants`.
 - **Separate initiatives:** the `dart-petitparser-examples` grammars (lisp/prolog interpreters,
-  regexp engine); a benchmark-driven look at failure-path perf (lazy messages, not `Rc<str>`).
+  regexp engine — note `tests/example-grammars/prolog/` may already be in progress); a
+  benchmark-driven look at failure-path perf (lazy messages, not `Rc<str>`).
 
 See the dedicated bullets below for each. Roughly equal priority within a size band.
 
@@ -1450,16 +1452,30 @@ See the dedicated bullets below for each. Roughly equal priority within a size b
     (`stringify!` kept it nearly verbatim, not heavily re-spaced); `map!` named fn → `f: "add_one"`.
     Full suite + clippy stayed green. The tradeoff: the nice-print call site is `map!(p, f)`, not
     `p.map(func!(f))` — same info, one macro at the front instead of wrapping the argument.
-  - **User's stated preference for if/when we return to this:** not opposed to *forcing* a
-    `func!(...)`-style wrapper at **every** site a parser takes a function, accepting the churn,
-    since it improves Debug cheaply. That means changing every bare `Fn` field in the parser
-    structs (`MapParser.f`, `OnlyIfParser.predicate/factory`, `FlatMapParser`, `ContinuationParser`,
-    the `mapN`/`seq! =>` expansions, …) to `FnWithText`. **Open question to test first if we go
-    this route:** whether a single macro-only path (no bare-closure path, method takes
-    `FnWithText<F>` directly) preserves inference — the per-combinator `map!`→direct-arg form
-    *definitely* does (proven above); a unified `func!`-wrapper-into-a-`FnWithText`-taking-method
-    has the same nested-closure-in-a-struct-literal inference risk as the `Into` form and must be
-    verified before committing to the sweep.
+  - **DECISION (2026-07): do it, design A (force `func!` everywhere), but DEFERRED — it's a large
+    rewrite, so it's its own focused pass, not bundled with anything else.** The user wants it
+    because it's the only way to *distinguish* the Debug output of different function-taking parsers
+    (today they all print `<mapping function>`/`<function>`).
+  - **The open inference question is now RESOLVED: forcing `func!` via a *direct* `FnWithText<F>`
+    parameter DOES preserve closure inference** (verified with a minimal standalone repro:
+    `w.map(func!(|x| x + 1))` compiled with `x` inferred from `T`, method signature
+    `fn map<U, F: Fn(T) -> U>(self, fwt: FnWithText<F>)`). The earlier failure was specifically the
+    `impl Into<FnWithText<F>>` *layer* — routing the closure through `Into` is what broke the
+    `F: Fn(T) -> U` bound from flowing back to pin the closure param; a *direct* `FnWithText<F>`
+    argument does not have that problem. So design A is feasible.
+  - **The cost that decides scope, flagged when we resolved it: design A is a BREAKING public-API
+    change.** With `.map` taking `FnWithText<F>` directly, a bare `.map(|x| ...)` no longer
+    compiles — *every* caller (including downstream users) must write `.map(func!(|x| ...))`. Plus
+    the internal sweep touches every `.map`/`.map2-9`/`.only_if`/`.only_if_with_factory`/`.flat_map`/
+    `.call_cc` site, the `mapN`/`seq! =>` macro expansions, and all example grammars. The
+    non-breaking alternative (design B: keep bare `.map`, add a `map!` macro + `map_with_text`
+    method, opt-in per site — the `map!(p, f)` form already prototyped) was offered and passed over:
+    the user chose A (uniform, every function-parser self-describes in Debug) and accepts the churn
+    and the API break. **When picking this up:** it's one big mechanical sweep — change every bare
+    `Fn` field (`MapParser.f`, `OnlyIfParser.predicate/factory`, `FlatMapParser`, `ContinuationParser`,
+    …) to `FnWithText`, make each method take `FnWithText<F>` directly, update `(self.f)(x)` →
+    `(self.f.f)(x)`, wrap every call site (and macro expansion) in `func!`, and fix the example
+    grammars. No further inference risk to resolve — it's proven.
   - **Keep this off the equality path** (same trap as the `#[track_caller]` idea): `text` is not
     identity — two `map!(p, |x| x+1)` at different sites have identical text but are different
     closures, so text-equality would false-positive `RepeatedChoice`. `MapParser` equality stays
