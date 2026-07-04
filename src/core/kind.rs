@@ -82,7 +82,12 @@ pub enum ParserKind<'a> {
         trailing: Trailing,
     },
     Seq,
+    /// The owning `SettableParser` (strong `Rc`). Distinct from `SettableRef` so
+    /// `UnresolvedSettable` flags an unresolved rule once (at the owner) and so an owner and a
+    /// `.borrow()` of it don't compare structurally equal (which would false-flag `DuplicateParser`).
     Settable,
+    /// A `SettableParserRef` (weak back-reference). See `Settable`.
+    SettableRef,
     Skip,
     Success(NeverEq),
     Token,

@@ -31,10 +31,6 @@ impl<T: Clone + Debug> HasChildren for SuccessParser<T> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Success(NeverEq)
     }
-
-    fn is_directly_nullable(&self) -> bool {
-        true
-    }
 }
 
 pub fn success<T: Clone + Debug>(result: T) -> SuccessParser<T> {

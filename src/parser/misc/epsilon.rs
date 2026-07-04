@@ -18,10 +18,6 @@ impl<T: Clone + Debug> HasChildren for EpsilonParser<T> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Epsilon(NeverEq)
     }
-
-    fn is_directly_nullable(&self) -> bool {
-        true
-    }
 }
 
 impl<T> Parser<T> for EpsilonParser<T>

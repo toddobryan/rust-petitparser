@@ -4,12 +4,29 @@ use std::{
 };
 
 use crate::{
-    core::parser::HasChildren,
+    core::{kind::ParserKind, parser::HasChildren},
     parser::misc::epsilon::epsilon,
     reflection::path::{ParserPath, depth_first_search},
 };
 
 type PtrKey = *const ();
+
+/// A parser that matches the empty input on its own — the leaf/repeater cases the analyzer's
+/// first-set seeding needs. Replaces the old `HasChildren::is_directly_nullable` flag; classified
+/// straight off `kind()`.
+fn is_directly_nullable(p: &Rc<dyn HasChildren>) -> bool {
+    matches!(
+        p.kind(),
+        ParserKind::Position
+            | ParserKind::Epsilon(_)
+            | ParserKind::Success(_)
+            | ParserKind::PossessiveRepeating { min: 0, .. }
+            | ParserKind::GreedyRepeating { min: 0, .. }
+            | ParserKind::LazyRepeating { min: 0, .. }
+            | ParserKind::SeparatedListRepeating { min: 0, .. }
+            | ParserKind::CharacterRepeating { min: 0, .. }
+    )
+}
 
 pub(crate) fn ptr(p: &Rc<dyn HasChildren>) -> PtrKey {
     Rc::as_ptr(p) as PtrKey
@@ -129,7 +146,7 @@ impl Analyzer {
             if p.children().is_empty() {
                 p_first_set.insert(ptr(&p));
             }
-            if p.is_directly_nullable() {
+            if is_directly_nullable(&p) {
                 p_first_set.insert(ptr(&self.sentinel));
             }
             first_sets.insert(ptr(&p), p_first_set);
@@ -152,7 +169,7 @@ impl Analyzer {
         sentinel_ptr: PtrKey,
     ) -> bool {
         let mut changed: bool = false;
-        if parser.is_sequence() {
+        if matches!(parser.kind(), ParserKind::Seq) {
             for child in parser.children() {
                 let mut is_nullable = false;
                 let to_add: Vec<PtrKey> = first_sets[&ptr(&child)].iter().copied().collect();
@@ -231,7 +248,7 @@ impl Analyzer {
     }
 
     fn compute_cycle_children(&self, parser: &Rc<dyn HasChildren>) -> Vec<Rc<dyn HasChildren>> {
-        if parser.is_sequence() {
+        if matches!(parser.kind(), ParserKind::Seq) {
             let mut children: Vec<Rc<dyn HasChildren>> = Vec::new();
             for child in parser.children() {
                 children.push(child.clone());

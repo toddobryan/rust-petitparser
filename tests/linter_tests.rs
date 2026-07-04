@@ -110,7 +110,16 @@ fn parsers_grammar_shared_rule_dedupes() {
     let g = SharedRuleGrammar::new();
     let root: Rc<dyn HasChildren> = Rc::new(g);
     let analyzer = Analyzer::new(root);
-    let char_leaf_count = analyzer.parsers.iter().filter(|p| p.is_char()).count();
+    let char_leaf_count = analyzer
+        .parsers
+        .iter()
+        .filter(|p| {
+            matches!(
+                p.kind(),
+                ParserKind::Char { .. } | ParserKind::PredicateChar { .. }
+            )
+        })
+        .count();
     assert_that!(char_leaf_count, eq(1));
 }
 
@@ -237,7 +246,7 @@ fn is_nullable_transitive_through_choice() {
         .parsers
         .iter()
         .skip(1)
-        .filter(|p| p.is_choice() && analyzer.is_nullable(p))
+        .filter(|p| matches!(p.kind(), ParserKind::Choice { .. }) && analyzer.is_nullable(p))
         .collect();
     assert_that!(nullable_inner_choices.len(), eq(1));
 }

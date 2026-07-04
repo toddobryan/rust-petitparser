@@ -55,14 +55,6 @@ impl HasChildren for CharacterRepeatingParser {
             max: self.max,
         }
     }
-
-    fn is_char_repeating(&self) -> bool {
-        true
-    }
-
-    fn is_directly_nullable(&self) -> bool {
-        self.min == 0
-    }
 }
 
 impl Parser<String> for CharacterRepeatingParser {

@@ -23,14 +23,6 @@ impl<T: Debug + 'static> HasChildren for InputParser<T> {
         vec![self.delegate.clone()]
     }
 
-    fn is_input(&self) -> bool {
-        true
-    }
-
-    fn input_message(&self) -> Option<&str> {
-        self.message.as_deref()
-    }
-
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Input {
             message: self.message.as_deref(),

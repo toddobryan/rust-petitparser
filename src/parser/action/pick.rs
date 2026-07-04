@@ -25,10 +25,6 @@ impl<I: Debug + 'static, T: Debug> HasChildren for PickParser<I, T> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Pick { index: self.index }
     }
-
-    fn is_pick_parser(&self) -> bool {
-        true
-    }
 }
 
 impl<I, T> Parser<T> for PickParser<I, T>

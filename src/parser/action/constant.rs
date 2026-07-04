@@ -21,10 +21,6 @@ impl<T: Debug + 'static, V: Debug> HasChildren for ConstantParser<T, V> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Constant(NeverEq)
     }
-
-    fn is_constant_parser(&self) -> bool {
-        true
-    }
 }
 
 impl<T, V> Parser<V> for ConstantParser<T, V>

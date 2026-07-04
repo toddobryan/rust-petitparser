@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    core::parser::HasChildren,
+    core::{kind::ParserKind, parser::HasChildren},
     reflection::{
         analyzer::{Analyzer, ptr},
         equality::{is_parser_iterable_equal, parsers_equal},
@@ -43,11 +43,14 @@ impl LinterRule for CharacterRepeater {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_input() {
+        if matches!(parser.kind(), ParserKind::Input { .. }) {
             let repeating = parser.children()[0].clone();
-            if repeating.is_possessive_repeating() {
+            if matches!(repeating.kind(), ParserKind::PossessiveRepeating { .. }) {
                 let character = repeating.children()[0].clone();
-                if character.is_char() {
+                if matches!(
+                    character.kind(),
+                    ParserKind::Char { .. } | ParserKind::PredicateChar { .. }
+                ) {
                     issues.push(LinterIssue {
                         title: self.title().to_string(),
                         severity: self.severity(),
@@ -155,10 +158,10 @@ impl LinterRule for NestedChoice {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_choice() {
+        if matches!(parser.kind(), ParserKind::Choice { .. }) {
             let length = parser.children().len();
             for (i, child) in parser.children().iter().enumerate() {
-                if i < length - 1 && child.is_choice() {
+                if i < length - 1 && matches!(child.kind(), ParserKind::Choice { .. }) {
                     issues.push(LinterIssue {
                         title: self.title().to_string(),
                         severity: self.severity(),
@@ -193,13 +196,18 @@ impl LinterRule for NullableRepeater {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_repeating()
-            && parser
-                .children()
-                .first()
-                .is_some_and(|p| analyzer.is_nullable(p))
+        if matches!(
+            parser.kind(),
+            ParserKind::PossessiveRepeating { .. }
+                | ParserKind::GreedyRepeating { .. }
+                | ParserKind::LazyRepeating { .. }
+                | ParserKind::SeparatedListRepeating { .. }
+        ) && parser
+            .children()
+            .first()
+            .is_some_and(|p| analyzer.is_nullable(p))
         {
-            if parser.is_separated_repeating()
+            if matches!(parser.kind(), ParserKind::SeparatedListRepeating { .. })
                 && let Some(sep) = parser.children().get(1)
                 && !analyzer.is_nullable(sep)
             {
@@ -235,7 +243,7 @@ impl LinterRule for OverlappingChoice {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_choice() {
+        if matches!(parser.kind(), ParserKind::Choice { .. }) {
             let children = parser.children();
             for (i, child_i) in children.iter().enumerate() {
                 let first_i = analyzer.first_set(child_i);
@@ -278,7 +286,7 @@ impl LinterRule for RepeatedChoice {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_choice() {
+        if matches!(parser.kind(), ParserKind::Choice { .. }) {
             let children = parser.children();
             for i in 0..children.len() {
                 for j in (i + 1)..children.len() {
@@ -326,14 +334,16 @@ impl LinterRule for UnnecessaryInput {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_input()
-            && parser.input_message().is_none()
+        if matches!(parser.kind(), ParserKind::Input { .. })
+            && matches!(parser.kind(), ParserKind::Input { message: None })
             && let Some(delegate) = parser.children().first()
-            && (delegate.is_char()
-                || delegate.is_input()
-                || delegate.is_newline()
-                || delegate.is_string_predicate()
-                || delegate.is_char_repeating())
+            && (matches!(
+                delegate.kind(),
+                ParserKind::Char { .. } | ParserKind::PredicateChar { .. }
+            ) || matches!(delegate.kind(), ParserKind::Input { .. })
+                || matches!(delegate.kind(), ParserKind::Newline)
+                || matches!(delegate.kind(), ParserKind::Predicate { .. })
+                || matches!(delegate.kind(), ParserKind::CharacterRepeating { .. }))
         {
             issues.push(LinterIssue {
                 title: self.title().to_string(),
@@ -367,7 +377,9 @@ impl LinterRule for UnoptimizedInput {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_input() && parser.input_message().is_none() {
+        if matches!(parser.kind(), ParserKind::Input { .. })
+            && matches!(parser.kind(), ParserKind::Input { message: None })
+        {
             issues.push(LinterIssue {
                 title: self.title().to_string(),
                 severity: self.severity(),
@@ -399,7 +411,7 @@ impl LinterRule for UnreachableChoice {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_choice() {
+        if matches!(parser.kind(), ParserKind::Choice { .. }) {
             let length = parser.children().len();
             for (i, child) in parser.children().iter().enumerate() {
                 if i < length - 1 && analyzer.is_nullable(child) {
@@ -442,7 +454,16 @@ impl LinterRule for UnresolvedSettable {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_settable() && parser.is_undefined() {
+        // An unresolved settable is the owning `SettableParser` (kind `Settable`, *not* the
+        // `SettableRef` weak back-references) still delegating to the `undefined()` sentinel — i.e.
+        // its sole child has kind `Undefined`. Checking the owner's kind (not `SettableRef`) is
+        // what keeps this firing once per unresolved rule rather than once per reference to it.
+        if matches!(parser.kind(), ParserKind::Settable)
+            && parser
+                .children()
+                .first()
+                .is_some_and(|child| matches!(child.kind(), ParserKind::Undefined { .. }))
+        {
             issues.push(LinterIssue {
                 title: self.title().to_string(),
                 severity: self.severity(),
@@ -473,7 +494,7 @@ impl LinterRule for UnusedResult {
         parser: &Rc<dyn HasChildren>,
         issues: &mut Vec<LinterIssue>,
     ) {
-        if parser.is_input() {
+        if matches!(parser.kind(), ParserKind::Input { .. }) {
             let deep_children = analyzer.all_children(parser);
             let ignored_results: Vec<&Rc<dyn HasChildren>> = deep_children
                 .iter()

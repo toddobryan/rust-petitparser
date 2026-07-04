@@ -27,10 +27,6 @@ impl<I: Debug + 'static, T: Debug> HasChildren for ElementsAtParser<I, T> {
             indexes: &self.indexes,
         }
     }
-
-    fn is_elements_at_parser(&self) -> bool {
-        true
-    }
 }
 
 impl<I, T> Parser<Vec<T>> for ElementsAtParser<I, T>

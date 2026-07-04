@@ -32,10 +32,6 @@ macro_rules! impl_seq {
             fn kind(&self) -> ParserKind<'_> {
                 ParserKind::Seq
             }
-
-            fn is_sequence(&self) -> bool {
-                true
-            }
         }
 
         impl <$($value),+> Parser<($($value,)+)> for $name<$($value),+>

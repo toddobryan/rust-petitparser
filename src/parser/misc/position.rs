@@ -15,10 +15,6 @@ impl HasChildren for PositionParser {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Position
     }
-
-    fn is_directly_nullable(&self) -> bool {
-        true
-    }
 }
 
 impl Parser<usize> for PositionParser {

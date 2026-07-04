@@ -17,10 +17,6 @@ impl HasChildren for NewlineParser {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Newline
     }
-
-    fn is_newline(&self) -> bool {
-        true
-    }
 }
 
 impl Parser<String> for NewlineParser {

@@ -46,10 +46,6 @@ impl<T: Debug + 'static> HasChildren for OnlyIfParser<T> {
             factory: self.factory.map(|f| f as PtrKey),
         }
     }
-
-    fn is_only_if(&self) -> bool {
-        true
-    }
 }
 
 impl<T> Parser<T> for OnlyIfParser<T>

@@ -1352,8 +1352,19 @@ roughly equal priority.
     field), and only after a profile shows leaf value-cloning / construction as a real cost. If
     parse-time failure cost is the goal, do the laziness change instead. Measure first — the
     "bites in backtracking-heavy grammars" claim was never benchmarked.
-  - **Deferred refactor 3 — collapse the ~18 `is_*` boolean flags into `kind()`. GATED ON
-    REFACTOR 1 (borrow `ParserKind`) — do that first.** Now that `kind()` encodes everything the
+  - **Deferred refactor 3 — collapse the ~18 `is_*` boolean flags into `kind()`. DONE.** All the
+    raw `is_*`/`repeating_min`/`input_message` methods were removed from `HasChildren`, the `Rc<P>`
+    blanket (now just `children()`+`kind()`), and ~36 per-type overrides; every classification is a
+    `matches!(p.kind(), …)`. `is_result_producing` stays as the one derived helper (built on
+    `kind()`). Non-1:1 mappings handled: `is_char` → `Char | PredicateChar`, `is_repeating` → all
+    four repeater variants, `is_directly_nullable` → a value-dependent helper in `analyzer.rs`
+    (`Position | Epsilon | Success | <repeaters with min: 0>`); `repeating_min` was dead and deleted.
+    Also **un-merged `Settable`/`SettableRef`** (`SettableParserRef::kind()` → new `SettableRef`
+    variant) so `UnresolvedSettable` (reformulated as "owner is `Settable` **and** child is
+    `Undefined`") still fires once per unresolved rule, and an owner vs a `.borrow()` of it no longer
+    compare structurally equal (fixed a latent `DuplicateParser` false-positive). The historical
+    rationale for the refactor is preserved below for context.
+    ORIGINAL NOTE (gated on refactor 1, now both done): Now that `kind()` encodes everything the
     `HasChildren` booleans do, the flags (`is_char`/`is_choice`/`is_sequence`/`is_input`/
     `is_repeating`/`is_map_parser`/…) are redundant: `p.is_char()` → `matches!(p.kind(),
     ParserKind::Char { .. })`, etc. **Win:** ~73 override sites across ~30 files removed, `kind()`

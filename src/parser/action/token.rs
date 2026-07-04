@@ -19,10 +19,6 @@ impl<T: Debug + 'static> HasChildren for TokenParser<T> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Token
     }
-
-    fn is_token_parser(&self) -> bool {
-        true
-    }
 }
 
 impl<T> Parser<Token<T>> for TokenParser<T>

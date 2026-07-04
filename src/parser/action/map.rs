@@ -31,10 +31,6 @@ impl<T: 'static, F> HasChildren for MapParser<T, F> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Map(NeverEq)
     }
-
-    fn is_map_parser(&self) -> bool {
-        true
-    }
 }
 
 impl<T, U, F> Parser<U> for MapParser<T, F>

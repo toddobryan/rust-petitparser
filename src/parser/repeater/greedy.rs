@@ -29,18 +29,6 @@ impl<T: Debug + 'static> HasChildren for GreedyRepeatingParser<T> {
             max: self.max,
         }
     }
-
-    fn is_repeating(&self) -> bool {
-        true
-    }
-
-    fn is_directly_nullable(&self) -> bool {
-        self.min == 0
-    }
-
-    fn repeating_min(&self) -> Option<usize> {
-        Some(self.min)
-    }
 }
 
 impl<T> Parser<Vec<T>> for GreedyRepeatingParser<T>

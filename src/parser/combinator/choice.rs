@@ -32,10 +32,6 @@ macro_rules! choice_impl {
             fn kind(&self) -> ParserKind<'_> {
                 ParserKind::Choice { joiner: self.joiner as PtrKey }
             }
-
-            fn is_choice(&self) -> bool {
-                true
-            }
         }
 
         impl <T: Debug + 'static> Parser<T> for $name<T> {

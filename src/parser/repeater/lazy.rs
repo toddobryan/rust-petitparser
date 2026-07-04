@@ -27,18 +27,6 @@ impl<T: Debug + 'static, TC: Debug + 'static> HasChildren for LazyRepeatingParse
             max: self.max,
         }
     }
-
-    fn is_repeating(&self) -> bool {
-        true
-    }
-
-    fn is_directly_nullable(&self) -> bool {
-        self.min == 0
-    }
-
-    fn repeating_min(&self) -> Option<usize> {
-        Some(self.min)
-    }
 }
 
 impl<T, TC> Parser<Vec<T>> for LazyRepeatingParser<T, TC>

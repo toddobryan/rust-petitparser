@@ -71,10 +71,6 @@ impl HasChildren for PredicateParser {
             message: &self.message,
         }
     }
-
-    fn is_string_predicate(&self) -> bool {
-        true
-    }
 }
 
 impl Parser<String> for PredicateParser {

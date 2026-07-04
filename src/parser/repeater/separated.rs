@@ -133,22 +133,6 @@ impl<T: Debug + 'static, Sep: Debug + 'static> HasChildren
             trailing: self.trailing,
         }
     }
-
-    fn is_repeating(&self) -> bool {
-        true
-    }
-
-    fn is_separated_repeating(&self) -> bool {
-        true
-    }
-
-    fn is_directly_nullable(&self) -> bool {
-        self.min == 0
-    }
-
-    fn repeating_min(&self) -> Option<usize> {
-        Some(self.min)
-    }
 }
 
 impl<T, Sep> Parser<SeparatedList<T, Sep>> for SeparatedListRepeatingParser<T, Sep>

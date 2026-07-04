@@ -187,10 +187,6 @@ impl HasChildren for CharParser {
             message: self.message.as_deref(),
         }
     }
-
-    fn is_char(&self) -> bool {
-        true
-    }
 }
 
 impl Parser<char> for CharParser {
@@ -269,10 +265,6 @@ impl HasChildren for PredicateCharParser {
             test: Rc::as_ptr(&self.test) as PtrKey,
             message: self.message.as_deref(),
         }
-    }
-
-    fn is_char(&self) -> bool {
-        true
     }
 }
 

@@ -44,10 +44,6 @@ impl<T> HasChildren for UndefinedParser<T> {
             message: &self.message,
         }
     }
-
-    fn is_undefined(&self) -> bool {
-        true
-    }
 }
 
 impl<T: 'static> Parser<T> for UndefinedParser<T> {
@@ -107,14 +103,6 @@ impl<T: 'static> HasChildren for SettableParser<T> {
     fn kind(&self) -> ParserKind<'_> {
         ParserKind::Settable
     }
-
-    fn is_settable(&self) -> bool {
-        true
-    }
-
-    fn is_undefined(&self) -> bool {
-        self.delegate.borrow().is_undefined()
-    }
 }
 
 impl<T: 'static> Parser<T> for SettableParser<T> {
@@ -163,7 +151,7 @@ impl<T: 'static> HasChildren for SettableParserRef<T> {
     }
 
     fn kind(&self) -> ParserKind<'_> {
-        ParserKind::Settable
+        ParserKind::SettableRef
     }
 }
 
