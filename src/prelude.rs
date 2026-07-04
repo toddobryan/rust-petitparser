@@ -27,5 +27,6 @@ pub use crate::parser::repeater::separated::{Interleaved, SeparatedList, Trailin
 pub use crate::reflection::analyzer::*;
 pub use crate::reflection::linter::*;
 pub use crate::reflection::linter_rules::*;
+pub use crate::reflection::path::ParserPath;
 pub use crate::{assert_failure, assert_success};
 pub use rust_petitparser_macros::{choice, grammar, seq};

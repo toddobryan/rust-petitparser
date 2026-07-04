@@ -35,6 +35,12 @@ impl ParserPath {
         self.parsers.len()
     }
 
+    /// Always `false` — a `ParserPath` holds at least its source parser (enforced by [`new`]).
+    /// Present for API symmetry with [`len`](Self::len).
+    pub fn is_empty(&self) -> bool {
+        self.parsers.is_empty()
+    }
+
     pub fn contains(&self, parser: &Rc<dyn HasChildren>) -> bool {
         self.parsers.iter().any(|p| ptr(p) == ptr(parser))
     }
