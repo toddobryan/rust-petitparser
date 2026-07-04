@@ -1319,15 +1319,39 @@ roughly equal priority.
     builds both kinds, compares while both parsers are alive (we hold the `Rc`s), and drops them — no
     kind is ever stored. Only cost is a lifetime param on the enum; `*const ()`/unit variants are
     unaffected. Parked mid-implementation (owned+cloning works for now); revisit for the alloc win.
-  - **Deferred refactor 2 — `Option<Rc<str>>` for message storage** (note: `Rc<str>`, not
-    `Rc<String>`/`Rc<Option<String>>` — `Rc<str>` is the single-indirection form; `Option<Rc<str>>`
-    keeps `None` free and shares the string). Every parser's `message: Option<String>`/`String` →
-    `Option<Rc<str>>`/`Rc<str>`, making all message clones refcount bumps. Helps `kind()` clones *and*
-    — the real prize — the **parse-time failure path** (`context.failure(self.message.clone())`
-    allocates a fresh `String` on every failure, which bites in backtracking-heavy grammars). Broad
-    mechanical change (every struct, constructor, `context.failure()` signature, `message_for`/
-    `input_message`), orthogonal to the linter — do it as its own benchmark-driven pass. If done, an
-    owned `ParserKind` becomes cheap too, softening the need for deferred refactor 1.
+  - **Deferred refactor 2 — `Option<Rc<str>>` for message storage. RE-EVALUATED: probably NOT
+    worth it; do not do it as a blanket sweep without a profile first.** The original idea: every
+    parser's `message: Option<String>`/`String` → `Option<Rc<str>>`/`Rc<str>` (`Rc<str>`, not
+    `Rc<String>`/`Rc<Option<String>>` — single indirection; `Option<Rc<str>>` keeps `None` free),
+    making message clones refcount bumps, with the "real prize" being the parse-time failure path.
+    A close look (2026-07 session) found the premise mostly doesn't hold:
+    - **The `kind()`-clone motivation is gone** — deferred refactor 1 (borrowing `ParserKind`)
+      already made `kind()` allocation-free, so messages no longer get cloned there at all.
+    - **The "don't duplicate heap data across shared parsers" motivation is already covered** by
+      the whole-parser `Rc<dyn Parser<T>>` storage (see "Storage model"): a reused sub-parser is one
+      `Rc` pointed at N times, so its message/`Vec` fields exist *once*. The parse hot path clones
+      *zero* parsers (every `parse_on`/`fast_parse_on` is `&self`); construction `Rc`-wraps rather
+      than deep-copies. So concrete leaf value-clones (the only thing that would duplicate a message
+      `String`) are rare and never on the parse path. Field-level `Rc` is therefore *second-order* on
+      top of the already-pulled first-order lever, and doesn't even dedup *separately constructed*
+      parsers (`string("x")` in three rules still builds three `Rc<str>`s).
+    - **For the failure path specifically, `Rc<str>` can *regress* the hot case.** The most frequent
+      failures are char parsers, and `CharParser::message_for` builds a *dynamic, unique-per-failure*
+      message via `format!` (the `message: None` default path — the common one; only a custom
+      `message: Some(m)` returns a stored clone). Making `Failure.message: Rc<str>` forces that
+      `format!` → `String` → `Rc<str>` (`Rc<str>: From<String>` copies into a fresh refcounted
+      buffer — **two** allocs where today there's one). `Rc` only helps *static/stored* messages that
+      are cloned per failure (predicate/string/failure parsers — colder than char failures).
+    - **The real parse-time lever is lazy message construction, not `Rc<str>`.** Most failures are
+      built then immediately discarded (a choice drops the first alternative's failure; a repetition
+      drops its terminating failure), yet `message_for` runs eagerly *before* `context.failure`. The
+      win is deferring message construction until read (e.g. `context.failure(impl FnOnce -> String)`
+      or `Failure.message` as `{ Eager(Rc<str>) | Lazy(...) }`), so a discarded failure never runs
+      its `format!`. That's a different, more targeted change.
+    Bottom line: only pursue `Rc<str>` for non-perf reasons (structs shrink 24→16 bytes per message
+    field), and only after a profile shows leaf value-cloning / construction as a real cost. If
+    parse-time failure cost is the goal, do the laziness change instead. Measure first — the
+    "bites in backtracking-heavy grammars" claim was never benchmarked.
   - **Deferred refactor 3 — collapse the ~18 `is_*` boolean flags into `kind()`. GATED ON
     REFACTOR 1 (borrow `ParserKind`) — do that first.** Now that `kind()` encodes everything the
     `HasChildren` booleans do, the flags (`is_char`/`is_choice`/`is_sequence`/`is_input`/
