@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::{
@@ -19,6 +20,7 @@ pub const ALL_LINTER_RULES: &[&dyn LinterRule] = &[
     &NullableRepeater,
     &OverlappingChoice,
     &RepeatedChoice,
+    &StrongSettableCycle,
     &UnnecessaryInput,
     &UnoptimizedInput,
     &UnreachableChoice,
@@ -526,4 +528,74 @@ impl LinterRule for UnusedResult {
             }
         }
     }
+}
+
+/// **Not a dart rule** — Rust-specific, since dart has no strong/weak-reference distinction to get
+/// wrong. Flags a `SettableParser` that was tied into a recursive grammar with `s.set(s.clone())`
+/// (a strong `Rc` clone) where `s.set(s.borrow())` (a weak `SettableParserRef`) was meant. The
+/// former builds a genuine strong `Rc` cycle: it leaks memory (the refcount never reaches 0) and
+/// would stack-overflow a naive recursive `Debug` print.
+///
+/// Detection: a correct recursive cycle always closes through a `SettableParserRef` (kind
+/// `SettableRef`, a `Weak` upgrade); a broken one closes through only strong `children()` edges. So
+/// we ask, per node: is it reachable from itself using only strong edges — i.e. cutting the walk at
+/// every `SettableRef` (its outgoing edge is the weak one that legitimately breaks a cycle)? If so,
+/// it sits on an unbroken strong cycle.
+pub struct StrongSettableCycle;
+
+impl LinterRule for StrongSettableCycle {
+    fn severity(&self) -> LinterType {
+        LinterType::Error
+    }
+
+    fn title(&self) -> &str {
+        "Strong settable cycle"
+    }
+
+    fn run(
+        &self,
+        _analyzer: &Analyzer,
+        parser: &Rc<dyn HasChildren>,
+        issues: &mut Vec<LinterIssue>,
+    ) {
+        if on_strong_cycle(parser) {
+            issues.push(LinterIssue {
+                title: self.title().to_string(),
+                severity: self.severity(),
+                parser: parser.clone(),
+                description: "This parser is part of an unbroken strong Rc cycle — most likely a \
+                              settable wired with `s.set(s.clone())` where `s.set(s.borrow())` was \
+                              meant. A strong cycle leaks memory (its refcount never reaches zero); \
+                              use `.borrow()` for the back-reference that closes the cycle."
+                    .to_string(),
+            });
+        }
+    }
+}
+
+/// Whether `start` is reachable from itself using only strong `children()` edges — cutting the
+/// walk at every `SettableRef` node, whose one outgoing edge is the `Weak` upgrade that
+/// legitimately breaks a recursive cycle. A `SettableRef` can never anchor a strong cycle, so it's
+/// never itself flagged.
+fn on_strong_cycle(start: &Rc<dyn HasChildren>) -> bool {
+    if matches!(start.kind(), ParserKind::SettableRef) {
+        return false;
+    }
+    let start_ptr = ptr(start);
+    let mut visited: HashSet<*const ()> = HashSet::new();
+    let mut stack: Vec<Rc<dyn HasChildren>> = start.children();
+    while let Some(node) = stack.pop() {
+        if ptr(&node) == start_ptr {
+            return true; // returned to `start` without crossing a weak (SettableRef) edge
+        }
+        if !visited.insert(ptr(&node)) {
+            continue;
+        }
+        // A SettableRef's outgoing edge is the weak one — don't follow it (it can't be part of a
+        // *strong* cycle).
+        if !matches!(node.kind(), ParserKind::SettableRef) {
+            stack.extend(node.children());
+        }
+    }
+    false
 }

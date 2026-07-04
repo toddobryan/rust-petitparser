@@ -713,6 +713,46 @@ fn unused_result_no_issue_without_a_result_producing_child() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Linter: StrongSettableCycle (Rust-specific — s.set(s.clone()) vs s.set(s.borrow()))
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[gtest]
+fn strong_settable_cycle_flags_clone_instead_of_borrow() {
+    // s.set(s.clone()): a strong Rc clone of the settable (NOT a weak .borrow()) -> the cycle
+    // closes through only strong edges -> memory leak. Flagged (the strong self-loop node).
+    let mut s: SettableParser<()> = SettableParser::undefined();
+    let strong_clone = s.clone();
+    s.set(strong_clone);
+    let root: Rc<dyn HasChildren> = Rc::new(s);
+    assert_one_issue(root, &[&StrongSettableCycle], "Strong settable cycle");
+}
+
+#[gtest]
+fn strong_settable_cycle_no_issue_for_correct_borrow() {
+    // s.set(s.borrow()): the cycle closes through a SettableParserRef (weak) -> no strong cycle.
+    let mut s: SettableParser<()> = SettableParser::undefined();
+    let weak_ref = s.borrow();
+    s.set(weak_ref);
+    let root: Rc<dyn HasChildren> = Rc::new(s);
+    assert_no_issues(root, &[&StrongSettableCycle]);
+}
+
+#[gtest]
+fn strong_settable_cycle_no_issue_for_grammar_generated_recursion() {
+    // A real #[grammar]-generated recursive grammar closes every cycle through SettableParserRef
+    // (the macro rewrites rule calls to `.borrow()`), so it must never trip this rule.
+    let g = SharedRuleGrammar::new();
+    let root: Rc<dyn HasChildren> = Rc::new(g);
+    assert_no_issues(root, &[&StrongSettableCycle]);
+}
+
+#[gtest]
+fn strong_settable_cycle_no_issue_for_acyclic_grammar() {
+    let root: Rc<dyn HasChildren> = Rc::new(choice2(char('a'), char('b')).star());
+    assert_no_issues(root, &[&StrongSettableCycle]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ALL_LINTER_RULES smoke tests
 // ─────────────────────────────────────────────────────────────────────────────
 
